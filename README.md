@@ -24,7 +24,7 @@ Password is hardcoded as **0327** for the MVP.
 - Styling: Tailwind CSS
 - Backend: Node.js + Express
 - Real-time: Socket.io
-- Voice/Video: Metered (WebRTC embed)
+- Voice/Video: Metered Video SDK (WebRTC)
 - Database: In-memory for MVP (schemas provided below)
 
 ## Project Structure
@@ -90,17 +90,17 @@ Password is hardcoded as **0327** for the MVP.
 ## Metered Integration Steps
 
 1. Create a Metered project and room in the Metered dashboard.
-2. Copy the meeting URL or the domain/room slug.
+2. Copy the room join URL or note the domain + room name.
 3. Set one of the following in `client/.env`:
 
 ```
-VITE_METERED_MEETING_URL=https://YOUR_DOMAIN.metered.live/YOUR_ROOM
+VITE_METERED_MEETING_URL=https://YOUR_SUBDOMAIN.metered.live/YOUR_ROOM
 # or
-VITE_METERED_DOMAIN=YOUR_DOMAIN
+VITE_METERED_DOMAIN=YOUR_SUBDOMAIN.metered.live
 VITE_METERED_ROOM=YOUR_ROOM
 ```
 
-4. Start the client. The Call panel will embed Metered for
+4. Start the client. The Call panel now uses the Metered Video SDK to provide
    voice, video, screen share, mute/unmute, and voice activity detection.
 
 ## Data Models (Schema Design)
@@ -179,7 +179,7 @@ Environment variables (optional):
 ```
 VITE_API_URL=http://localhost:3001
 VITE_SOCKET_URL=http://localhost:3001
-VITE_METERED_MEETING_URL=https://YOUR_DOMAIN.metered.live/YOUR_ROOM
+VITE_METERED_MEETING_URL=https://YOUR_SUBDOMAIN.metered.live/YOUR_ROOM
 ```
 
 ## Notes
@@ -234,9 +234,9 @@ VITE_SOCKET_URL=https://YOUR-SERVER-URL
 Optional Metered variables:
 
 ```
-VITE_METERED_MEETING_URL=https://YOUR_DOMAIN.metered.live/YOUR_ROOM
+VITE_METERED_MEETING_URL=https://YOUR_SUBDOMAIN.metered.live/YOUR_ROOM
 # or
-VITE_METERED_DOMAIN=YOUR_DOMAIN
+VITE_METERED_DOMAIN=YOUR_SUBDOMAIN.metered.live
 VITE_METERED_ROOM=YOUR_ROOM
 ```
 

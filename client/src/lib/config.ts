@@ -7,5 +7,11 @@ const domain = import.meta.env.VITE_METERED_DOMAIN
 const room = import.meta.env.VITE_METERED_ROOM
 const meetingUrl = import.meta.env.VITE_METERED_MEETING_URL
 
-export const METERED_MEETING_URL =
-  meetingUrl ?? (domain && room ? `https://${domain}.metered.live/${room}` : undefined)
+const normalizeUrl = (value: string) => (value.startsWith('http') ? value : `https://${value}`)
+const normalizeDomain = (value: string) => (value.includes('.') ? value : `${value}.metered.live`)
+
+const domainUrl = domain ? normalizeUrl(normalizeDomain(domain)) : undefined
+const meetingUrlValue = meetingUrl ? normalizeUrl(meetingUrl) : undefined
+
+export const METERED_ROOM_URL =
+  meetingUrlValue ?? (domainUrl && room ? `${domainUrl.replace(/\/$/, '')}/${room}` : undefined)
