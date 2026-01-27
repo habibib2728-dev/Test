@@ -188,3 +188,57 @@ VITE_METERED_MEETING_URL=https://YOUR_DOMAIN.metered.live/YOUR_ROOM
   by mapping the schema above if you need persistence.
 - Only two concurrent users are allowed in the room.
 
+## Railway Deployment
+
+Deploy as two Railway services (server + client) from the same repo.
+
+### Server Service (Express + Socket.io)
+
+- **Root Directory:** `server`
+- **Build Command:** `npm install`
+- **Start Command:** `npm run start`
+
+Required variables:
+
+```
+CLIENT_ORIGIN=https://YOUR-CLIENT-URL
+```
+
+Optional variables:
+
+```
+PORT=3001                       # Railway sets this automatically
+ROOM_PASSWORD=0327
+ROOM_NAME=Private Duo Room
+```
+
+You can provide multiple allowed origins by separating with commas:
+
+```
+CLIENT_ORIGIN=https://app.example.com,https://www.example.com
+```
+
+### Client Service (Vite React)
+
+- **Root Directory:** `client`
+- **Build Command:** `npm install && npm run build`
+- **Start Command:** `npm run start`
+
+Required variables (set before build):
+
+```
+VITE_API_URL=https://YOUR-SERVER-URL
+VITE_SOCKET_URL=https://YOUR-SERVER-URL
+```
+
+Optional Metered variables:
+
+```
+VITE_METERED_MEETING_URL=https://YOUR_DOMAIN.metered.live/YOUR_ROOM
+# or
+VITE_METERED_DOMAIN=YOUR_DOMAIN
+VITE_METERED_ROOM=YOUR_ROOM
+```
+
+> Note: Vite reads `VITE_*` variables at build time. Set them before the client build runs.
+

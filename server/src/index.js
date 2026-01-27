@@ -6,12 +6,21 @@ import { randomUUID } from 'crypto'
 
 const PORT = process.env.PORT || 3001
 const ROOM_PASSWORD = process.env.ROOM_PASSWORD || '0327'
-const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || 'http://localhost:5173'
+const DEFAULT_ORIGIN = 'http://localhost:5173'
+const rawOrigins = process.env.CLIENT_ORIGIN || DEFAULT_ORIGIN
+const allowedOrigins = rawOrigins
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean)
+
+if (!allowedOrigins.length) {
+  allowedOrigins.push(DEFAULT_ORIGIN)
+}
 const ROOM_NAME = process.env.ROOM_NAME || 'Private Duo Room'
 const MAX_PARTICIPANTS = 2
 
 const app = express()
-app.use(cors({ origin: CLIENT_ORIGIN, credentials: true }))
+app.use(cors({ origin: allowedOrigins }))
 app.use(express.json())
 
 const sessions = new Map()
@@ -72,7 +81,7 @@ app.post('/api/auth', (req, res) => {
 const server = http.createServer(app)
 const io = new Server(server, {
   cors: {
-    origin: CLIENT_ORIGIN,
+    origin: allowedOrigins,
     methods: ['GET', 'POST'],
   },
 })
