@@ -190,9 +190,49 @@ VITE_METERED_MEETING_URL=https://YOUR_SUBDOMAIN.metered.live/YOUR_ROOM
 
 ## Railway Deployment
 
-Deploy as two Railway services (server + client) from the same repo.
+You can deploy either as **one service** (simplest) or **two services** (client + server).
 
-### Server Service (Express + Socket.io)
+### Option A: Single Service (recommended)
+
+- **Root Directory:** `/` (repo root)
+- **Build Command:** `npm run build`
+- **Start Command:** `npm run start`
+
+Required variables:
+
+```
+CLIENT_ORIGIN=https://YOUR-RAILWAY-URL
+```
+
+Optional variables:
+
+```
+ROOM_PASSWORD=0327
+ROOM_NAME=Private Duo Room
+```
+
+Optional client variables (set before build):
+
+```
+# If omitted, the client will use the same origin at runtime.
+VITE_API_URL=https://YOUR-RAILWAY-URL
+VITE_SOCKET_URL=https://YOUR-RAILWAY-URL
+```
+
+Optional Metered variables:
+
+```
+VITE_METERED_MEETING_URL=https://YOUR_SUBDOMAIN.metered.live/YOUR_ROOM
+# or
+VITE_METERED_DOMAIN=YOUR_SUBDOMAIN.metered.live
+VITE_METERED_ROOM=YOUR_ROOM
+```
+
+> Note: Vite reads `VITE_*` variables at build time. Set them before the client build runs.
+
+### Option B: Two Services (client + server)
+
+#### Server Service (Express + Socket.io)
 
 - **Root Directory:** `server`
 - **Build Command:** `npm install`
@@ -218,7 +258,7 @@ You can provide multiple allowed origins by separating with commas:
 CLIENT_ORIGIN=https://app.example.com,https://www.example.com
 ```
 
-### Client Service (Vite React)
+#### Client Service (Vite React)
 
 - **Root Directory:** `client`
 - **Build Command:** `npm install && npm run build`

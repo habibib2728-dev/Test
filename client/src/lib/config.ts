@@ -1,7 +1,12 @@
 const fallbackApiUrl = 'http://localhost:3001'
+const runtimeOrigin =
+  typeof window !== 'undefined' && window.location?.origin ? window.location.origin : fallbackApiUrl
 
-export const API_URL = import.meta.env.VITE_API_URL ?? fallbackApiUrl
-export const SOCKET_URL = import.meta.env.VITE_SOCKET_URL ?? API_URL
+const apiUrl = import.meta.env.VITE_API_URL
+export const API_URL = apiUrl && apiUrl.length > 0 ? apiUrl : runtimeOrigin
+
+const socketUrl = import.meta.env.VITE_SOCKET_URL
+export const SOCKET_URL = socketUrl && socketUrl.length > 0 ? socketUrl : API_URL
 
 const domain = import.meta.env.VITE_METERED_DOMAIN
 const room = import.meta.env.VITE_METERED_ROOM

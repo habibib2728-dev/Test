@@ -3,6 +3,9 @@ import express from 'express'
 import http from 'http'
 import { Server } from 'socket.io'
 import { randomUUID } from 'crypto'
+import fs from 'fs'
+import path from 'path'
+import { fileURLToPath } from 'url'
 
 const PORT = process.env.PORT || 3001
 const ROOM_PASSWORD = process.env.ROOM_PASSWORD || '0327'
@@ -22,6 +25,14 @@ const MAX_PARTICIPANTS = 2
 const app = express()
 app.use(cors({ origin: allowedOrigins }))
 app.use(express.json())
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const clientDistPath = path.resolve(__dirname, '../../client/dist')
+const clientIndexPath = path.join(clientDistPath, 'index.html')
+const hasClientBuild = fs.existsSync(clientIndexPath)
+if (hasClientBuild) {
+  app.use(express.static(clientDistPath))
+}
 
 const sessions = new Map()
 const activeUsers = new Map()
@@ -77,6 +88,16 @@ app.post('/api/auth', (req, res) => {
 
   return res.json({ sessionId, roomName: ROOM_NAME })
 })
+
+if (hasClientBuild) {
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api') || req.path.startsWith('/socket.io')) {
+      next()
+      return
+    }
+    res.sendFile(clientIndexPath)
+  })
+}
 
 const server = http.createServer(app)
 const io = new Server(server, {

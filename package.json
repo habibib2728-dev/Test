@@ -1,0 +1,9 @@
+{
+  "name": "private-duo-chat",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "npm --prefix server install && npm --prefix client install && npm --prefix client run build",
+    "start": "node server/src/index.js"
+  }
+}
