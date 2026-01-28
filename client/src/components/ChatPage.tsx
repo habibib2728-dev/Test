@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { io } from 'socket.io-client'
 import { SOCKET_URL } from '../lib/config'
-import type { Message, SessionInfo, User } from '../types'
+import type { Attachment, Message, SessionInfo, User } from '../types'
 import ChatHeader from './ChatHeader'
 import MessageList from './MessageList'
 import MessageInput from './MessageInput'
@@ -67,7 +67,7 @@ const ChatPage = ({ session, onLogout }: ChatPageProps) => {
       const latestCall = [...payload.messages].reverse().find((item) => item.kind === 'call')
       if (latestCall?.callStatus === 'started') {
         setCallState('active')
-      } else if (latestCall?.callStatus === 'ended') {
+      } else {
         setCallState('idle')
       }
     })
@@ -113,14 +113,14 @@ const ChatPage = ({ session, onLogout }: ChatPageProps) => {
     }
   }, [onLogout, session.username, socket])
 
-  const handleSend = (content: string) => {
+  const handleSend = (content: string, attachments: Attachment[]) => {
     if (!socket.connected) {
       setError('Not connected.')
       return
     }
     socket.emit(
       'message:send',
-      { content, replyTo: replyTo?.id ?? null },
+      { content, replyTo: replyTo?.id ?? null, attachments },
       (response: { ok: boolean; error?: string }) => {
         if (!response.ok) {
           setError(response.error ?? 'Unable to send message.')
@@ -197,11 +197,14 @@ const ChatPage = ({ session, onLogout }: ChatPageProps) => {
   }
 
   return (
-    <div className="flex h-screen flex-col bg-slate-900 text-slate-100">
+    <div className="flex h-screen flex-col bg-[#0a0f1c] text-slate-100">
       <ChatHeader
         roomName={roomName}
         users={users.map((user) => user.username)}
         connectionStatus={connectionStatus}
+        callState={callState}
+        onCallStart={handleJoinCall}
+        onCallEnd={() => callPanelRef.current?.leave()}
         onLogout={onLogout}
       />
       {error && (

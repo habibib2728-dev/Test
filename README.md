@@ -51,7 +51,7 @@ Password is hardcoded as **0327** for the MVP.
 
 ### Socket Events (client -> server)
 
-- `message:send` `{ content, replyTo }`
+- `message:send` `{ content, replyTo, attachments }`
 - `message:edit` `{ messageId, content }`
 - `message:delete` `{ messageId }`
 - `reaction:toggle` `{ messageId, emoji }`
@@ -124,6 +124,15 @@ Message {
   reactions: Reaction[]
   kind?: "text" | "call"
   callStatus?: "started" | "ended"
+  attachments?: Attachment[]
+}
+
+Attachment {
+  id: string
+  name: string
+  type: string
+  size: number
+  url: string
 }
 
 Reaction {

@@ -1,4 +1,11 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+} from 'react'
 import { METERED_ROOM_URL } from '../lib/config'
 
 type CallPanelProps = {
@@ -64,7 +71,7 @@ const CallPanel = forwardRef<CallPanelHandle, CallPanelProps>(
 
   const roomUrl = METERED_ROOM_URL ?? null
 
-  const resetMedia = () => {
+  const resetMedia = useCallback(() => {
     if (localVideoRef.current) {
       localVideoRef.current.srcObject = null
     }
@@ -74,9 +81,9 @@ const CallPanel = forwardRef<CallPanelHandle, CallPanelProps>(
     if (remoteAudioRef.current) {
       remoteAudioRef.current.srcObject = null
     }
-  }
+  }, [])
 
-  const handleLeave = async () => {
+  const handleLeave = useCallback(async () => {
     const meeting = meetingRef.current
     const wasJoined = joinedRef.current
     meetingRef.current = null
@@ -97,7 +104,7 @@ const CallPanel = forwardRef<CallPanelHandle, CallPanelProps>(
     if (wasJoined) {
       onCallLeft()
     }
-  }
+  }, [onCallLeft, resetMedia])
 
   useEffect(() => {
     return () => {
@@ -105,7 +112,7 @@ const CallPanel = forwardRef<CallPanelHandle, CallPanelProps>(
     }
   }, [handleLeave])
 
-  const handleJoin = async () => {
+  const handleJoin = useCallback(async () => {
     if (!roomUrl) {
       setError('Metered room is not configured.')
       return
@@ -216,9 +223,9 @@ const CallPanel = forwardRef<CallPanelHandle, CallPanelProps>(
       setStatus('idle')
       meetingRef.current = null
     }
-  }
+  }, [roomUrl, status, username, onCallJoined])
 
-  const handleToggleMic = async () => {
+  const handleToggleMic = useCallback(async () => {
     const meeting = meetingRef.current
     if (!meeting) {
       return
@@ -234,9 +241,9 @@ const CallPanel = forwardRef<CallPanelHandle, CallPanelProps>(
     } catch (micError) {
       setError('Unable to toggle microphone.')
     }
-  }
+  }, [isMicOn])
 
-  const handleToggleCamera = async () => {
+  const handleToggleCamera = useCallback(async () => {
     const meeting = meetingRef.current
     if (!meeting) {
       return
@@ -255,9 +262,9 @@ const CallPanel = forwardRef<CallPanelHandle, CallPanelProps>(
     } catch (cameraError) {
       setError('Unable to toggle camera.')
     }
-  }
+  }, [videoMode])
 
-  const handleToggleScreenShare = async () => {
+  const handleToggleScreenShare = useCallback(async () => {
     const meeting = meetingRef.current
     if (!meeting) {
       return
@@ -276,7 +283,7 @@ const CallPanel = forwardRef<CallPanelHandle, CallPanelProps>(
     } catch (screenError) {
       setError('Unable to toggle screen share.')
     }
-  }
+  }, [videoMode])
 
   const isJoined = status === 'joined'
   const isLoading = status === 'loading'
@@ -298,7 +305,7 @@ const CallPanel = forwardRef<CallPanelHandle, CallPanelProps>(
   )
 
   return (
-    <aside className="flex w-full max-w-sm flex-col border-l border-slate-800 bg-slate-950/60 animate-fade-up">
+    <aside className="flex w-full max-w-sm flex-col border-l border-slate-800 bg-[#0b1324]/90 animate-fade-up">
       <div className="border-b border-slate-800 px-4 py-4">
         <div className="text-xs uppercase tracking-[0.2em] text-slate-400">Call</div>
         <div className="mt-1 text-sm font-semibold text-slate-100">Metered Video SDK</div>
@@ -307,7 +314,7 @@ const CallPanel = forwardRef<CallPanelHandle, CallPanelProps>(
         </p>
         <div className="mt-4 flex flex-wrap gap-2">
           <button
-            className="flex-1 rounded-lg bg-blue-500 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-400 disabled:cursor-not-allowed disabled:opacity-60"
+            className="flex-1 rounded-lg bg-emerald-500 px-3 py-2 text-xs font-semibold text-slate-900 hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-60"
             onClick={isJoined ? handleLeave : handleJoin}
             type="button"
             disabled={!roomUrl || isLoading}
@@ -337,7 +344,7 @@ const CallPanel = forwardRef<CallPanelHandle, CallPanelProps>(
           <div className="text-xs uppercase tracking-[0.2em] text-slate-400">Remote</div>
           <div
             className={`relative mt-3 flex h-48 items-center justify-center rounded-lg border border-slate-800 bg-slate-950 ${
-              remoteIsActive ? 'ring-2 ring-emerald-400' : ''
+              remoteIsActive ? 'ring-2 ring-emerald-400/80' : ''
             }`}
           >
             <video
@@ -359,7 +366,7 @@ const CallPanel = forwardRef<CallPanelHandle, CallPanelProps>(
           <div className="text-xs uppercase tracking-[0.2em] text-slate-400">You</div>
           <div
             className={`relative mt-3 flex h-40 items-center justify-center rounded-lg border border-slate-800 bg-slate-950 ${
-              localIsActive ? 'ring-2 ring-emerald-400' : ''
+              localIsActive ? 'ring-2 ring-emerald-400/80' : ''
             }`}
           >
             <video
@@ -381,7 +388,7 @@ const CallPanel = forwardRef<CallPanelHandle, CallPanelProps>(
           <div className="text-xs uppercase tracking-[0.2em] text-slate-400">Controls</div>
           <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
             <button
-              className="rounded-md border border-slate-700 px-3 py-2 text-slate-200 hover:border-slate-500 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-md border border-slate-700 px-3 py-2 text-slate-200 hover:border-emerald-400/60 disabled:cursor-not-allowed disabled:opacity-50"
               onClick={handleToggleMic}
               disabled={!isJoined}
               type="button"
@@ -389,7 +396,7 @@ const CallPanel = forwardRef<CallPanelHandle, CallPanelProps>(
               {isMicOn ? 'Mute' : 'Unmute'}
             </button>
             <button
-              className="rounded-md border border-slate-700 px-3 py-2 text-slate-200 hover:border-slate-500 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-md border border-slate-700 px-3 py-2 text-slate-200 hover:border-emerald-400/60 disabled:cursor-not-allowed disabled:opacity-50"
               onClick={handleToggleCamera}
               disabled={!isJoined}
               type="button"
@@ -397,7 +404,7 @@ const CallPanel = forwardRef<CallPanelHandle, CallPanelProps>(
               {videoMode === 'camera' ? 'Camera Off' : 'Camera On'}
             </button>
             <button
-              className="rounded-md border border-slate-700 px-3 py-2 text-slate-200 hover:border-slate-500 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-md border border-slate-700 px-3 py-2 text-slate-200 hover:border-emerald-400/60 disabled:cursor-not-allowed disabled:opacity-50"
               onClick={handleToggleScreenShare}
               disabled={!isJoined}
               type="button"
@@ -405,7 +412,7 @@ const CallPanel = forwardRef<CallPanelHandle, CallPanelProps>(
               {videoMode === 'screen' ? 'Stop Share' : 'Share Screen'}
             </button>
             <button
-              className="rounded-md border border-slate-700 px-3 py-2 text-slate-200 hover:border-slate-500 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-md border border-rose-500/50 px-3 py-2 text-rose-200 hover:border-rose-400 disabled:cursor-not-allowed disabled:opacity-50"
               onClick={handleLeave}
               disabled={!isJoined}
               type="button"

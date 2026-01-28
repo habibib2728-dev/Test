@@ -8,6 +8,14 @@ export type Reaction = {
   user: string
 }
 
+export type Attachment = {
+  id: string
+  name: string
+  type: string
+  size: number
+  url: string
+}
+
 export type MessageKind = 'text' | 'call'
 export type CallStatus = 'started' | 'ended'
 
@@ -23,6 +31,7 @@ export type Message = {
   reactions: Reaction[]
   kind?: MessageKind
   callStatus?: CallStatus
+  attachments?: Attachment[]
 }
 
 export type SessionInfo = {

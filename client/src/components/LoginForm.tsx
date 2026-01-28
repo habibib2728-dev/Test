@@ -48,8 +48,8 @@ const LoginForm = ({ onSuccess }: LoginFormProps) => {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-900 px-4">
-      <div className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-950/80 p-8 shadow-lg">
+    <div className="flex min-h-screen items-center justify-center bg-[#0a0f1c] px-4">
+      <div className="w-full max-w-md rounded-2xl border border-slate-800 bg-[#0b1324]/90 p-8 shadow-lg">
         <div className="text-xs uppercase tracking-[0.2em] text-slate-400">Private Duo</div>
         <h1 className="mt-2 text-2xl font-semibold text-slate-100">Join the room</h1>
         <p className="mt-2 text-sm text-slate-400">
@@ -59,7 +59,7 @@ const LoginForm = ({ onSuccess }: LoginFormProps) => {
           <div>
             <label className="text-xs uppercase tracking-[0.2em] text-slate-400">Username</label>
             <input
-              className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-900 px-4 py-3 text-sm text-slate-100 placeholder:text-slate-600 focus:border-blue-500 focus:outline-none"
+              className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-900 px-4 py-3 text-sm text-slate-100 placeholder:text-slate-600 focus:border-emerald-400 focus:outline-none"
               placeholder="Type your name"
               value={username}
               onChange={(event) => setUsername(event.target.value)}
@@ -71,7 +71,7 @@ const LoginForm = ({ onSuccess }: LoginFormProps) => {
               Room password
             </label>
             <input
-              className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-900 px-4 py-3 text-sm text-slate-100 placeholder:text-slate-600 focus:border-blue-500 focus:outline-none"
+              className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-900 px-4 py-3 text-sm text-slate-100 placeholder:text-slate-600 focus:border-emerald-400 focus:outline-none"
               placeholder="0327"
               type="password"
               value={password}
@@ -85,7 +85,7 @@ const LoginForm = ({ onSuccess }: LoginFormProps) => {
             </div>
           )}
           <button
-            className="w-full rounded-lg bg-blue-500 px-4 py-3 text-sm font-semibold text-white hover:bg-blue-400 disabled:cursor-not-allowed disabled:opacity-60"
+            className="w-full rounded-lg bg-emerald-500 px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-60"
             disabled={isSubmitting}
             type="submit"
           >

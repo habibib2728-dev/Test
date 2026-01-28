@@ -28,7 +28,7 @@ const ReactionBar = ({ reactions, currentUser, onToggle }: ReactionBarProps) => 
             key={emoji}
             className={`flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition ${
               hasReacted
-                ? 'border-blue-400 bg-blue-500/20 text-blue-200'
+                ? 'border-emerald-400/60 bg-emerald-500/20 text-emerald-100'
                 : 'border-slate-700 bg-slate-800 text-slate-200'
             }`}
             onClick={() => onToggle(emoji)}

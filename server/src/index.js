@@ -21,6 +21,8 @@ if (!allowedOrigins.length) {
 }
 const ROOM_NAME = process.env.ROOM_NAME || 'Private Duo Room'
 const MAX_PARTICIPANTS = 2
+const MAX_ATTACHMENTS = 4
+const MAX_ATTACHMENT_BYTES = 2 * 1024 * 1024
 
 const app = express()
 app.use(cors({ origin: allowedOrigins }))
@@ -140,7 +142,38 @@ io.on('connection', (socket) => {
 
   socket.on('message:send', (payload, ack) => {
     const content = typeof payload?.content === 'string' ? payload.content.trim() : ''
-    if (!content) {
+    const rawAttachments = Array.isArray(payload?.attachments) ? payload.attachments : []
+    if (rawAttachments.length > MAX_ATTACHMENTS) {
+      ack?.({ ok: false, error: `You can attach up to ${MAX_ATTACHMENTS} files.` })
+      return
+    }
+
+    const attachments = rawAttachments
+      .map((attachment) => {
+        const name = typeof attachment?.name === 'string' ? attachment.name : null
+        const type = typeof attachment?.type === 'string' ? attachment.type : null
+        const size = typeof attachment?.size === 'number' ? attachment.size : null
+        const url = typeof attachment?.url === 'string' ? attachment.url : null
+        const id = typeof attachment?.id === 'string' ? attachment.id : randomUUID()
+        if (!name || !type || !size || !url) {
+          return null
+        }
+        if (!url.startsWith('data:')) {
+          return null
+        }
+        if (size > MAX_ATTACHMENT_BYTES) {
+          return null
+        }
+        return { id, name, type, size, url }
+      })
+      .filter(Boolean)
+
+    if (rawAttachments.length && attachments.length !== rawAttachments.length) {
+      ack?.({ ok: false, error: 'Attachments must be under 2MB.' })
+      return
+    }
+
+    if (!content && attachments.length === 0) {
       ack?.({ ok: false, error: 'Message cannot be empty.' })
       return
     }
@@ -156,6 +189,7 @@ io.on('connection', (socket) => {
       replyTo: payload?.replyTo ?? null,
       reactions: [],
       kind: 'text',
+      attachments,
     }
 
     messages.push(message)
@@ -216,6 +250,7 @@ io.on('connection', (socket) => {
     message.deleted = true
     message.edited = false
     message.editedAt = null
+    message.attachments = []
     io.emit('message:updated', message)
     ack?.({ ok: true })
   })
@@ -288,6 +323,7 @@ io.on('connection', (socket) => {
       reactions: [],
       kind: 'call',
       callStatus: status,
+      attachments: [],
     }
 
     messages.push(message)

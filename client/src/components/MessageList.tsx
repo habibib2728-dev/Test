@@ -33,8 +33,8 @@ const MessageList = ({
   }, [messages.length])
 
   return (
-    <div className="flex-1 overflow-y-auto bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 px-6 py-4">
-      <div className="flex flex-col gap-6">
+    <div className="flex-1 overflow-y-auto bg-[#0b1222] px-6 py-4">
+      <div className="flex flex-col gap-4">
         {messages.map((message) => (
           <MessageItem
             key={message.id}
