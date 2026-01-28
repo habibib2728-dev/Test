@@ -155,6 +155,7 @@ io.on('connection', (socket) => {
       deleted: false,
       replyTo: payload?.replyTo ?? null,
       reactions: [],
+      kind: 'text',
     }
 
     messages.push(message)
@@ -173,6 +174,11 @@ io.on('connection', (socket) => {
     const message = messages.find((item) => item.id === messageId)
     if (!message) {
       ack?.({ ok: false, error: 'Message not found.' })
+      return
+    }
+
+    if (message.kind !== 'text') {
+      ack?.({ ok: false, error: 'Only text messages can be edited.' })
       return
     }
 
@@ -196,6 +202,11 @@ io.on('connection', (socket) => {
       return
     }
 
+    if (message.kind !== 'text') {
+      ack?.({ ok: false, error: 'Only text messages can be deleted.' })
+      return
+    }
+
     if (message.author !== username) {
       ack?.({ ok: false, error: 'You can only delete your own messages.' })
       return
@@ -214,6 +225,11 @@ io.on('connection', (socket) => {
     const message = messages.find((item) => item.id === messageId)
     if (!message || typeof emoji !== 'string') {
       ack?.({ ok: false, error: 'Invalid reaction.' })
+      return
+    }
+
+    if (message.kind !== 'text') {
+      ack?.({ ok: false, error: 'Reactions are only supported for text messages.' })
       return
     }
 
@@ -248,6 +264,35 @@ io.on('connection', (socket) => {
 
   socket.on('typing:stop', () => {
     stopTyping(io, username)
+  })
+
+  socket.on('call:status', (payload, ack) => {
+    const status = payload?.status
+    if (status !== 'started' && status !== 'ended') {
+      ack?.({ ok: false, error: 'Invalid call status.' })
+      return
+    }
+
+    const message = {
+      id: randomUUID(),
+      content:
+        status === 'started'
+          ? `${username} started a call`
+          : `${username} ended the call`,
+      author: username,
+      timestamp: new Date().toISOString(),
+      edited: false,
+      editedAt: null,
+      deleted: false,
+      replyTo: null,
+      reactions: [],
+      kind: 'call',
+      callStatus: status,
+    }
+
+    messages.push(message)
+    io.emit('message:new', message)
+    ack?.({ ok: true })
   })
 
   socket.on('disconnect', () => {

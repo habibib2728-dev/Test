@@ -9,6 +9,7 @@ type MessageListProps = {
   onEdit: (messageId: string, content: string) => void
   onDelete: (messageId: string) => void
   onToggleReaction: (messageId: string, emoji: string) => void
+  onJoinCall: () => void
 }
 
 const MessageList = ({
@@ -18,6 +19,7 @@ const MessageList = ({
   onEdit,
   onDelete,
   onToggleReaction,
+  onJoinCall,
 }: MessageListProps) => {
   const bottomRef = useRef<HTMLDivElement | null>(null)
 
@@ -31,7 +33,7 @@ const MessageList = ({
   }, [messages.length])
 
   return (
-    <div className="flex-1 overflow-y-auto px-6 py-4">
+    <div className="flex-1 overflow-y-auto bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 px-6 py-4">
       <div className="flex flex-col gap-6">
         {messages.map((message) => (
           <MessageItem
@@ -43,6 +45,7 @@ const MessageList = ({
             onEdit={onEdit}
             onDelete={onDelete}
             onToggleReaction={onToggleReaction}
+            onJoinCall={onJoinCall}
           />
         ))}
       </div>

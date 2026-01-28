@@ -1,8 +1,15 @@
-import { useEffect, useRef, useState } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { METERED_ROOM_URL } from '../lib/config'
 
 type CallPanelProps = {
   username: string
+  onCallJoined: () => void
+  onCallLeft: () => void
+}
+
+export type CallPanelHandle = {
+  join: () => void
+  leave: () => void
 }
 
 const METERED_SDK_URL = 'https://cdn.metered.ca/sdk/video/1.4.5/sdk.min.js'
@@ -36,8 +43,10 @@ const loadMeteredSdk = () => {
 
 type VideoMode = 'off' | 'camera' | 'screen'
 
-const CallPanel = ({ username }: CallPanelProps) => {
+const CallPanel = forwardRef<CallPanelHandle, CallPanelProps>(
+  ({ username, onCallJoined, onCallLeft }, ref) => {
   const meetingRef = useRef<any>(null)
+  const joinedRef = useRef(false)
   const localVideoRef = useRef<HTMLVideoElement | null>(null)
   const remoteVideoRef = useRef<HTMLVideoElement | null>(null)
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null)
@@ -69,7 +78,9 @@ const CallPanel = ({ username }: CallPanelProps) => {
 
   const handleLeave = async () => {
     const meeting = meetingRef.current
+    const wasJoined = joinedRef.current
     meetingRef.current = null
+    joinedRef.current = false
     resetMedia()
     setStatus('idle')
     setIsMicOn(false)
@@ -83,13 +94,16 @@ const CallPanel = ({ username }: CallPanelProps) => {
         // Ignore leave errors so UI can reset cleanly.
       }
     }
+    if (wasJoined) {
+      onCallLeft()
+    }
   }
 
   useEffect(() => {
     return () => {
       void handleLeave()
     }
-  }, [])
+  }, [handleLeave])
 
   const handleJoin = async () => {
     if (!roomUrl) {
@@ -194,9 +208,11 @@ const CallPanel = ({ username }: CallPanelProps) => {
 
       await meeting.join({ roomURL: roomUrl, name: username })
       setStatus('joined')
+      joinedRef.current = true
+      onCallJoined()
     } catch (joinError) {
       const message = joinError instanceof Error ? joinError.message : 'Unable to join call.'
-      setError(message)
+      setError(`${message} Check your Metered domain and room settings.`)
       setStatus('idle')
       meetingRef.current = null
     }
@@ -268,8 +284,21 @@ const CallPanel = ({ username }: CallPanelProps) => {
   const localIsActive = activeSpeakerId && meetingRef.current?.participantSessionId === activeSpeakerId
   const remoteIsActive = activeSpeakerId && remoteParticipant?.id === activeSpeakerId
 
+  useImperativeHandle(
+    ref,
+    () => ({
+      join: () => {
+        void handleJoin()
+      },
+      leave: () => {
+        void handleLeave()
+      },
+    }),
+    [handleJoin, handleLeave],
+  )
+
   return (
-    <aside className="flex w-full max-w-sm flex-col border-l border-slate-800 bg-slate-950/60">
+    <aside className="flex w-full max-w-sm flex-col border-l border-slate-800 bg-slate-950/60 animate-fade-up">
       <div className="border-b border-slate-800 px-4 py-4">
         <div className="text-xs uppercase tracking-[0.2em] text-slate-400">Call</div>
         <div className="mt-1 text-sm font-semibold text-slate-100">Metered Video SDK</div>
@@ -283,7 +312,7 @@ const CallPanel = ({ username }: CallPanelProps) => {
             type="button"
             disabled={!roomUrl || isLoading}
           >
-            {isJoined ? 'Leave Call' : isLoading ? 'Connecting...' : 'Join Call'}
+            {isJoined ? 'End Call' : isLoading ? 'Connecting...' : 'Call'}
           </button>
           <div className="rounded-full border border-slate-800 px-3 py-2 text-[10px] uppercase text-slate-400">
             {isJoined ? 'Connected' : 'Offline'}
@@ -393,6 +422,9 @@ const CallPanel = ({ username }: CallPanelProps) => {
       </div>
     </aside>
   )
-}
+},
+)
+
+CallPanel.displayName = 'CallPanel'
 
 export default CallPanel

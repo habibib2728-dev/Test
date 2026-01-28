@@ -20,3 +20,33 @@
     box-sizing: border-box;
   }
 }
+
+@layer utilities {
+  .animate-fade-up {
+    animation: fadeUp 0.25s ease-out;
+  }
+
+  .animate-pop {
+    animation: pop 0.2s ease-out;
+  }
+}
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pop {
+  from {
+    transform: scale(0.98);
+  }
+  to {
+    transform: scale(1);
+  }
+}

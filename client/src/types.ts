@@ -8,6 +8,9 @@ export type Reaction = {
   user: string
 }
 
+export type MessageKind = 'text' | 'call'
+export type CallStatus = 'started' | 'ended'
+
 export type Message = {
   id: string
   content: string
@@ -18,6 +21,8 @@ export type Message = {
   deleted?: boolean
   replyTo?: string | null
   reactions: Reaction[]
+  kind?: MessageKind
+  callStatus?: CallStatus
 }
 
 export type SessionInfo = {

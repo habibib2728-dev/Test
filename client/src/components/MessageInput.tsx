@@ -71,7 +71,7 @@ const MessageInput = ({
   }
 
   return (
-    <div className="border-t border-slate-800 bg-slate-900 px-6 py-4">
+    <div className="border-t border-slate-800 bg-slate-900/80 px-6 py-4 backdrop-blur">
       {replyTo && (
         <div className="mb-3 flex items-center justify-between rounded-lg border border-slate-700 bg-slate-800/60 px-3 py-2 text-xs text-slate-300">
           <div className="truncate">
@@ -89,28 +89,28 @@ const MessageInput = ({
       )}
       <form className="flex items-center gap-3" onSubmit={handleSubmit}>
         <button
-          className="rounded-md border border-slate-700 px-3 py-2 text-sm text-slate-300 hover:border-slate-500"
+          className="rounded-full border border-slate-700 px-3 py-2 text-sm text-slate-300 hover:border-slate-500"
           disabled={disabled}
           type="button"
         >
           📎
         </button>
         <button
-          className="rounded-md border border-slate-700 px-3 py-2 text-sm text-slate-300 hover:border-slate-500"
+          className="rounded-full border border-slate-700 px-3 py-2 text-sm text-slate-300 hover:border-slate-500"
           disabled={disabled}
           type="button"
         >
           😊
         </button>
         <input
-          className="flex-1 rounded-lg border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none"
-          placeholder="Message the room"
+          className="flex-1 rounded-full border border-slate-700 bg-slate-800/80 px-4 py-3 text-sm text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none"
+          placeholder="Message..."
           value={value}
           onChange={(event) => handleChange(event.target.value)}
           disabled={disabled}
         />
         <button
-          className="rounded-lg bg-blue-500 px-4 py-3 text-sm font-semibold text-white hover:bg-blue-400 disabled:cursor-not-allowed disabled:opacity-60"
+          className="rounded-full bg-blue-500 px-4 py-3 text-sm font-semibold text-white hover:bg-blue-400 disabled:cursor-not-allowed disabled:opacity-60"
           disabled={disabled || !value.trim()}
           type="submit"
         >

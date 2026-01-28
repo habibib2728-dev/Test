@@ -55,6 +55,7 @@ Password is hardcoded as **0327** for the MVP.
 - `message:edit` `{ messageId, content }`
 - `message:delete` `{ messageId }`
 - `reaction:toggle` `{ messageId, emoji }`
+- `call:status` `{ status: "started" | "ended" }`
 - `typing:start`
 - `typing:stop`
 
@@ -121,6 +122,8 @@ Message {
   deleted?: boolean
   replyTo?: string | null
   reactions: Reaction[]
+  kind?: "text" | "call"
+  callStatus?: "started" | "ended"
 }
 
 Reaction {

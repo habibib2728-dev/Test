@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { io } from 'socket.io-client'
 import { SOCKET_URL } from '../lib/config'
 import type { Message, SessionInfo, User } from '../types'
@@ -6,7 +6,7 @@ import ChatHeader from './ChatHeader'
 import MessageList from './MessageList'
 import MessageInput from './MessageInput'
 import TypingIndicator from './TypingIndicator'
-import CallPanel from './CallPanel'
+import CallPanel, { type CallPanelHandle } from './CallPanel'
 
 type ChatPageProps = {
   session: SessionInfo
@@ -23,6 +23,8 @@ const ChatPage = ({ session, onLogout }: ChatPageProps) => {
   const [replyTo, setReplyTo] = useState<Message | null>(null)
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('connecting')
   const [error, setError] = useState<string | null>(null)
+  const [callState, setCallState] = useState<'idle' | 'active'>('idle')
+  const callPanelRef = useRef<CallPanelHandle | null>(null)
 
   const socket = useMemo(
     () =>
@@ -62,6 +64,12 @@ const ChatPage = ({ session, onLogout }: ChatPageProps) => {
       setRoomName(payload.roomName)
       setMessages(payload.messages)
       setUsers(payload.users)
+      const latestCall = [...payload.messages].reverse().find((item) => item.kind === 'call')
+      if (latestCall?.callStatus === 'started') {
+        setCallState('active')
+      } else if (latestCall?.callStatus === 'ended') {
+        setCallState('idle')
+      }
     })
 
     socket.on('presence:update', (payload: { users: User[] }) => {
@@ -74,6 +82,13 @@ const ChatPage = ({ session, onLogout }: ChatPageProps) => {
 
     socket.on('message:new', (message: Message) => {
       setMessages((prev) => [...prev, message])
+      if (message.kind === 'call') {
+        if (message.callStatus === 'started') {
+          setCallState('active')
+        } else if (message.callStatus === 'ended') {
+          setCallState('idle')
+        }
+      }
     })
 
     socket.on('message:updated', (message: Message) => {
@@ -151,6 +166,36 @@ const ChatPage = ({ session, onLogout }: ChatPageProps) => {
     socket.emit('typing:stop')
   }
 
+  const emitCallStatus = (status: 'started' | 'ended') => {
+    if (!socket.connected) {
+      setError('Not connected.')
+      return
+    }
+    socket.emit('call:status', { status }, (response: { ok: boolean; error?: string }) => {
+      if (!response.ok) {
+        setError(response.error ?? 'Unable to update call status.')
+      }
+    })
+  }
+
+  const handleCallJoined = () => {
+    if (callState !== 'active') {
+      emitCallStatus('started')
+      setCallState('active')
+    }
+  }
+
+  const handleCallLeft = () => {
+    if (callState === 'active') {
+      emitCallStatus('ended')
+      setCallState('idle')
+    }
+  }
+
+  const handleJoinCall = () => {
+    callPanelRef.current?.join()
+  }
+
   return (
     <div className="flex h-screen flex-col bg-slate-900 text-slate-100">
       <ChatHeader
@@ -173,6 +218,7 @@ const ChatPage = ({ session, onLogout }: ChatPageProps) => {
             onEdit={handleEdit}
             onDelete={handleDelete}
             onToggleReaction={handleToggleReaction}
+            onJoinCall={handleJoinCall}
           />
           <TypingIndicator users={typingUsers} />
           <MessageInput
@@ -184,7 +230,12 @@ const ChatPage = ({ session, onLogout }: ChatPageProps) => {
             disabled={connectionStatus !== 'connected'}
           />
         </section>
-        <CallPanel username={session.username} />
+        <CallPanel
+          ref={callPanelRef}
+          username={session.username}
+          onCallJoined={handleCallJoined}
+          onCallLeft={handleCallLeft}
+        />
       </div>
     </div>
   )
