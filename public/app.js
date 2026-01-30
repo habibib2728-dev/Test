@@ -32,21 +32,12 @@ const state = {
 
 const ICE_SERVERS = [
   { urls: 'stun:stun.l.google.com:19302' },
-  { urls: 'stun:stun1.l.google.com:19302' },
-  { urls: 'stun:global.stun.twilio.com:3478' },
-  { urls: 'stun:openrelay.metered.ca:80' },
   {
-    urls: 'turn:openrelay.metered.ca:80',
-    username: 'openrelayproject',
-    credential: 'openrelayproject',
-  },
-  {
-    urls: 'turn:openrelay.metered.ca:443',
-    username: 'openrelayproject',
-    credential: 'openrelayproject',
-  },
-  {
-    urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+    urls: [
+      'turn:openrelay.metered.ca:80',
+      'turn:openrelay.metered.ca:443?transport=tcp',
+      'turns:openrelay.metered.ca:443?transport=tcp',
+    ],
     username: 'openrelayproject',
     credential: 'openrelayproject',
   },
@@ -133,7 +124,11 @@ const requestReconnect = async () => {
   }
   state.lastRestartAt = now;
   if (state.role === 'host' && state.isSharing) {
-    await createOffer({ iceRestart: true });
+    const shouldReset =
+      state.peerConnection &&
+      (state.peerConnection.connectionState === 'failed' ||
+        state.peerConnection.iceConnectionState === 'failed');
+    await createOffer({ iceRestart: true }, shouldReset);
   } else {
     socket.emit('request-offer', { roomId: state.roomId });
   }
@@ -162,6 +157,12 @@ const getPeerConnection = (reset = false) => {
       requestReconnect();
     } else if (stateLabel === 'failed') {
       setStatus('Connection failed. Reconnecting...', 'warning');
+      requestReconnect();
+    }
+  };
+  pc.oniceconnectionstatechange = () => {
+    if (pc.iceConnectionState === 'failed') {
+      setStatus('ICE failed. Reconnecting...', 'warning');
       requestReconnect();
     }
   };
@@ -197,12 +198,12 @@ const syncLocalTracks = (pc) => {
   });
 };
 
-const createOffer = async (options = {}) => {
+const createOffer = async (options = {}, resetConnection = false) => {
   if (!state.localStream) {
     setStatus('Start screen sharing first.', 'warning');
     return;
   }
-  const pc = getPeerConnection();
+  const pc = getPeerConnection(resetConnection);
   if (state.isMakingOffer || pc.signalingState !== 'stable') {
     return;
   }
@@ -440,7 +441,11 @@ socket.on('share-stopped', () => {
 
 socket.on('request-offer', async () => {
   if (state.role === 'host' && state.isSharing) {
-    await createOffer({ iceRestart: true });
+    const shouldReset =
+      state.peerConnection &&
+      (state.peerConnection.connectionState === 'failed' ||
+        state.peerConnection.iceConnectionState === 'failed');
+    await createOffer({ iceRestart: true }, shouldReset);
   }
 });
 
