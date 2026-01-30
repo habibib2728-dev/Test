@@ -17,6 +17,8 @@ const videoShell = document.getElementById('videoShell');
 const fullscreenBtn = document.getElementById('fullscreenBtn');
 const volumeRange = document.getElementById('volumeRange');
 const volumeValue = document.getElementById('volumeValue');
+const qualitySelect = document.getElementById('qualitySelect');
+const shareAudioToggle = document.getElementById('shareAudioToggle');
 
 const DEFAULT_ICE_SERVERS = [{ urls: 'stun:stun.l.google.com:19302' }];
 
@@ -107,6 +109,44 @@ const updateUI = () => {
     setConnectionText('Waiting for a room');
   }
   fullscreenBtn.disabled = !screenVideo.srcObject;
+  if (qualitySelect) {
+    qualitySelect.disabled = state.isSharing;
+  }
+  if (shareAudioToggle) {
+    shareAudioToggle.disabled = state.isSharing;
+  }
+};
+
+const getShareConstraints = () => {
+  const quality = qualitySelect ? qualitySelect.value : '720p60';
+  let width = 1280;
+  let height = 720;
+  let frameRate = 60;
+  if (quality === '1080p30') {
+    width = 1920;
+    height = 1080;
+    frameRate = 30;
+  } else if (quality === '1080p60') {
+    width = 1920;
+    height = 1080;
+    frameRate = 60;
+  }
+
+  const audioEnabled = shareAudioToggle ? shareAudioToggle.checked : true;
+  return {
+    video: {
+      width: { ideal: width, max: width },
+      height: { ideal: height, max: height },
+      frameRate: { ideal: frameRate, max: frameRate },
+    },
+    audio: audioEnabled
+      ? {
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false,
+        }
+      : false,
+  };
 };
 
 const attachStream = (stream, isLocal) => {
@@ -250,10 +290,9 @@ const createOffer = async (options = {}, resetConnection = false) => {
 const startShare = async () => {
   if (state.isSharing) return;
   try {
-    const stream = await navigator.mediaDevices.getDisplayMedia({
-      video: { frameRate: 30 },
-      audio: true,
-    });
+    const stream = await navigator.mediaDevices.getDisplayMedia(
+      getShareConstraints()
+    );
     state.localStream = stream;
     state.isSharing = true;
     attachStream(stream, true);
@@ -265,6 +304,16 @@ const startShare = async () => {
         stopShare(false);
       });
     });
+
+    if (shareAudioToggle && shareAudioToggle.checked) {
+      const hasAudio = stream.getAudioTracks().length > 0;
+      if (!hasAudio) {
+        setStatus(
+          'No audio track detected. Choose a Chrome tab and enable Share audio.',
+          'warning'
+        );
+      }
+    }
 
     if (state.viewerConnected) {
       await createOffer();

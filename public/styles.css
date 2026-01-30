@@ -163,6 +163,51 @@ button.accent {
   font-size: 0.85rem;
 }
 
+.share-settings {
+  margin-top: 16px;
+  padding: 16px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--panel-muted);
+  display: grid;
+  gap: 12px;
+}
+
+.share-settings .row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.select-field,
+.toggle-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text);
+  font-size: 0.95rem;
+}
+
+select {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+}
+
+.toggle-field input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+}
+
+.help-text {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
 .tips {
   margin: 16px 0 0;
   padding-left: 18px;

@@ -23,6 +23,8 @@ Open `http://localhost:3000`, create a room, and share the link.
 - Use Chrome for the best system audio capture.
 - In the screen picker, enable **Share audio**.
 - The viewer may need to click the video once to enable audio playback.
+- For a single-page share with audio, choose **Chrome tab** in the picker.
+- Use the quality dropdown for 720p60 or 1080p options.
 
 ## Deploy to Railway
 

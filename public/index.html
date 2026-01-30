@@ -69,6 +69,27 @@
             <div id="connectionDisplay">Waiting for a room</div>
           </div>
         </div>
+        <div class="share-settings">
+          <div class="label">Share settings</div>
+          <div class="row">
+            <label class="select-field">
+              <span>Quality</span>
+              <select id="qualitySelect">
+                <option value="720p60" selected>720p @ 60fps (recommended)</option>
+                <option value="1080p30">1080p @ 30fps (balanced)</option>
+                <option value="1080p60">1080p @ 60fps (high bandwidth)</option>
+              </select>
+            </label>
+            <label class="toggle-field">
+              <input id="shareAudioToggle" type="checkbox" checked />
+              <span>Capture tab/system audio</span>
+            </label>
+          </div>
+          <p class="help-text">
+            To share only a single page with its audio, pick <strong>Chrome
+            tab</strong> in the share dialog and enable <strong>Share audio</strong>.
+          </p>
+        </div>
         <ul class="tips">
           <li>Use Chrome for the best system audio capture.</li>
           <li>Enable "Share audio" in the screen picker.</li>
