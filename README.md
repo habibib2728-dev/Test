@@ -30,6 +30,27 @@ Open `http://localhost:3000`, create a room, and share the link.
 2. Ensure the start command is `npm start`.
 3. Railway will provide `PORT`, which the server already uses.
 
+## Configure TURN (required for different networks)
+
+For reliable connections across different networks/browsers, add TURN
+credentials in Railway:
+
+- `TURN_URLS` (comma-separated URLs)
+- `TURN_USERNAME`
+- `TURN_CREDENTIAL`
+
+Optional:
+
+- `STUN_URLS` (comma-separated STUN URLs)
+
+Example (Metered or Twilio values):
+
+```
+TURN_URLS=turn:example.turn.com:80,turns:example.turn.com:443?transport=tcp
+TURN_USERNAME=your-username
+TURN_CREDENTIAL=your-credential
+```
+
 ## Notes
 
 This app uses public STUN servers. If two peers are behind strict NATs, a TURN

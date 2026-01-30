@@ -18,6 +18,8 @@ const fullscreenBtn = document.getElementById('fullscreenBtn');
 const volumeRange = document.getElementById('volumeRange');
 const volumeValue = document.getElementById('volumeValue');
 
+const DEFAULT_ICE_SERVERS = [{ urls: 'stun:stun.l.google.com:19302' }];
+
 const state = {
   roomId: null,
   role: null,
@@ -28,21 +30,40 @@ const state = {
   isSharing: false,
   lastRestartAt: 0,
   isMakingOffer: false,
+  iceServers: DEFAULT_ICE_SERVERS,
+  turnConfigured: false,
 };
 
-const ICE_SERVERS = [
-  { urls: 'stun:stun.l.google.com:19302' },
-  {
-    urls: [
-      'turn:openrelay.metered.ca:80',
-      'turn:openrelay.metered.ca:443?transport=tcp',
-      'turns:openrelay.metered.ca:443?transport=tcp',
-    ],
-    username: 'openrelayproject',
-    credential: 'openrelayproject',
-  },
-];
 const RESTART_COOLDOWN_MS = 5000;
+let iceConfigPromise = null;
+
+const loadIceConfig = async () => {
+  if (iceConfigPromise) {
+    return iceConfigPromise;
+  }
+
+  iceConfigPromise = fetch('/config', { cache: 'no-store' })
+    .then(async (res) => {
+      if (!res.ok) {
+        throw new Error('Config unavailable');
+      }
+      return res.json();
+    })
+    .then((data) => {
+      if (data && Array.isArray(data.iceServers) && data.iceServers.length) {
+        state.iceServers = data.iceServers;
+      } else {
+        state.iceServers = DEFAULT_ICE_SERVERS;
+      }
+      state.turnConfigured = Boolean(data && data.turnConfigured);
+    })
+    .catch(() => {
+      state.iceServers = DEFAULT_ICE_SERVERS;
+      state.turnConfigured = false;
+    });
+
+  return iceConfigPromise;
+};
 
 const setStatus = (message, type = 'info') => {
   statusBadge.textContent = message;
@@ -139,7 +160,9 @@ const getPeerConnection = (reset = false) => {
     return state.peerConnection;
   }
   closePeerConnection();
-  const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+  const pc = new RTCPeerConnection({
+    iceServers: state.iceServers || DEFAULT_ICE_SERVERS,
+  });
   pc.onicecandidate = (event) => {
     if (event.candidate && state.roomId) {
       socket.emit('webrtc-ice', {
@@ -203,6 +226,7 @@ const createOffer = async (options = {}, resetConnection = false) => {
     setStatus('Start screen sharing first.', 'warning');
     return;
   }
+  await loadIceConfig();
   const pc = getPeerConnection(resetConnection);
   if (state.isMakingOffer || pc.signalingState !== 'stable') {
     return;
@@ -392,6 +416,7 @@ socket.on('error-message', ({ message }) => {
 
 socket.on('webrtc-offer', async ({ offer }) => {
   if (!offer) return;
+  await loadIceConfig();
   const resetConnection = state.role === 'viewer';
   const pc = getPeerConnection(resetConnection);
   try {
@@ -453,6 +478,8 @@ socket.on('disconnect', () => {
   setStatus('Disconnected from server', 'warning');
   updateUI();
 });
+
+loadIceConfig();
 
 const initialRoom = new URLSearchParams(window.location.search).get('room');
 if (initialRoom) {

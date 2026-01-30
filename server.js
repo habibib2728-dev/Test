@@ -10,7 +10,55 @@ const io = new Server(server);
 const PORT = process.env.PORT || 3000;
 const rooms = new Map();
 
+const parseEnvUrls = (value) =>
+  String(value || '')
+    .split(',')
+    .map((url) => url.trim())
+    .filter(Boolean);
+
+const buildIceConfig = () => {
+  const stunUrls = parseEnvUrls(process.env.STUN_URLS);
+  if (stunUrls.length === 0) {
+    stunUrls.push('stun:stun.l.google.com:19302');
+  }
+
+  const turnUrls = parseEnvUrls(
+    process.env.TURN_URLS || process.env.TURN_URL
+  );
+  const username = process.env.TURN_USERNAME || process.env.TURN_USER;
+  const credential =
+    process.env.TURN_CREDENTIAL ||
+    process.env.TURN_PASSWORD ||
+    process.env.TURN_PASS;
+
+  const iceServers = [];
+  if (stunUrls.length) {
+    iceServers.push({ urls: stunUrls });
+  }
+
+  const turnConfigured = Boolean(
+    turnUrls.length && username && credential
+  );
+
+  if (turnConfigured) {
+    iceServers.push({
+      urls: turnUrls,
+      username,
+      credential,
+    });
+  }
+
+  return { iceServers, turnConfigured };
+};
+
+const iceConfig = buildIceConfig();
+
 app.use(express.static(path.join(__dirname, 'public')));
+
+app.get('/config', (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.json(iceConfig);
+});
 
 app.get(/.*/, (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
