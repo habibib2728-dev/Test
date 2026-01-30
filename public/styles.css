@@ -212,10 +212,37 @@ button.accent {
   align-items: center;
   color: var(--muted);
   font-size: 0.9rem;
+  flex-wrap: wrap;
+  gap: 12px;
 }
 
 .hint {
   color: var(--muted);
+}
+
+.video-controls {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.volume-control {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--panel-muted);
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+}
+
+.volume-control input[type="range"] {
+  accent-color: var(--accent);
+  width: 140px;
+}
+
+.video-shell:fullscreen {
+  background: black;
 }
 
 @media (max-width: 720px) {
@@ -229,5 +256,20 @@ button.accent {
 
   .video-shell {
     height: 50vh;
+  }
+
+  .video-controls {
+    flex-direction: column;
+    align-items: flex-start;
+    width: 100%;
+  }
+
+  .volume-control {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .volume-control input[type="range"] {
+    width: 120px;
   }
 }

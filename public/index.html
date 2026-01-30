@@ -78,7 +78,7 @@
 
       <section class="card video-panel">
         <div class="section-title">Shared screen</div>
-        <div class="video-shell">
+        <div class="video-shell" id="videoShell">
           <video
             id="screenVideo"
             class="video"
@@ -92,6 +92,22 @@
         <div class="video-footer">
           <div class="hint">
             If the video is silent, click the player to enable audio.
+          </div>
+          <div class="video-controls">
+            <button id="fullscreenBtn" class="secondary">
+              Full screen
+            </button>
+            <div class="volume-control">
+              <span>Volume</span>
+              <input
+                id="volumeRange"
+                type="range"
+                min="0"
+                max="100"
+                value="100"
+              />
+              <span id="volumeValue">100%</span>
+            </div>
           </div>
         </div>
       </section>

@@ -13,6 +13,10 @@ const connectionDisplay = document.getElementById('connectionDisplay');
 const statusBadge = document.getElementById('statusBadge');
 const screenVideo = document.getElementById('screenVideo');
 const videoPlaceholder = document.getElementById('videoPlaceholder');
+const videoShell = document.getElementById('videoShell');
+const fullscreenBtn = document.getElementById('fullscreenBtn');
+const volumeRange = document.getElementById('volumeRange');
+const volumeValue = document.getElementById('volumeValue');
 
 const state = {
   roomId: null,
@@ -22,12 +26,31 @@ const state = {
   remoteStream: null,
   viewerConnected: false,
   isSharing: false,
+  lastRestartAt: 0,
 };
 
-const STUN_SERVERS = [
+const ICE_SERVERS = [
   { urls: 'stun:stun.l.google.com:19302' },
   { urls: 'stun:stun1.l.google.com:19302' },
+  { urls: 'stun:global.stun.twilio.com:3478' },
+  { urls: 'stun:openrelay.metered.ca:80' },
+  {
+    urls: 'turn:openrelay.metered.ca:80',
+    username: 'openrelayproject',
+    credential: 'openrelayproject',
+  },
+  {
+    urls: 'turn:openrelay.metered.ca:443',
+    username: 'openrelayproject',
+    credential: 'openrelayproject',
+  },
+  {
+    urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+    username: 'openrelayproject',
+    credential: 'openrelayproject',
+  },
 ];
+const RESTART_COOLDOWN_MS = 5000;
 
 const setStatus = (message, type = 'info') => {
   statusBadge.textContent = message;
@@ -70,6 +93,7 @@ const updateUI = () => {
   if (!inRoom) {
     setConnectionText('Waiting for a room');
   }
+  fullscreenBtn.disabled = !screenVideo.srcObject;
 };
 
 const attachStream = (stream, isLocal) => {
@@ -79,11 +103,13 @@ const attachStream = (stream, isLocal) => {
   screenVideo.play().catch(() => {
     setStatus('Click the video to start audio.', 'warning');
   });
+  updateUI();
 };
 
 const clearStream = () => {
   screenVideo.srcObject = null;
   videoPlaceholder.style.display = 'flex';
+  updateUI();
 };
 
 const closePeerConnection = () => {
@@ -97,9 +123,23 @@ const closePeerConnection = () => {
   state.remoteStream = null;
 };
 
+const requestReconnect = async () => {
+  if (!state.roomId) return;
+  const now = Date.now();
+  if (now - state.lastRestartAt < RESTART_COOLDOWN_MS) {
+    return;
+  }
+  state.lastRestartAt = now;
+  if (state.role === 'host' && state.isSharing) {
+    await createOffer({ iceRestart: true });
+  } else {
+    socket.emit('request-offer', { roomId: state.roomId });
+  }
+};
+
 const createPeerConnection = () => {
   closePeerConnection();
-  const pc = new RTCPeerConnection({ iceServers: STUN_SERVERS });
+  const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
   pc.onicecandidate = (event) => {
     if (event.candidate && state.roomId) {
       socket.emit('webrtc-ice', {
@@ -112,8 +152,12 @@ const createPeerConnection = () => {
     const stateLabel = pc.connectionState;
     if (stateLabel === 'connected') {
       setStatus('Connected and streaming', 'success');
-    } else if (stateLabel === 'disconnected' || stateLabel === 'failed') {
-      setStatus('Connection lost. Reconnect if needed.', 'warning');
+    } else if (stateLabel === 'disconnected') {
+      setStatus('Connection lost. Reconnecting...', 'warning');
+      requestReconnect();
+    } else if (stateLabel === 'failed') {
+      setStatus('Connection failed. Reconnecting...', 'warning');
+      requestReconnect();
     }
   };
   pc.ontrack = (event) => {
@@ -133,7 +177,7 @@ const createPeerConnection = () => {
   return pc;
 };
 
-const createOffer = async () => {
+const createOffer = async (options = {}) => {
   if (!state.localStream) {
     setStatus('Start screen sharing first.', 'warning');
     return;
@@ -142,7 +186,7 @@ const createOffer = async () => {
   state.localStream.getTracks().forEach((track) => {
     pc.addTrack(track, state.localStream);
   });
-  const offer = await pc.createOffer();
+  const offer = await pc.createOffer(options);
   await pc.setLocalDescription(offer);
   socket.emit('webrtc-offer', { roomId: state.roomId, offer });
 };
@@ -246,6 +290,28 @@ screenVideo.addEventListener('click', () => {
     screenVideo.play().catch(() => {});
   }
 });
+fullscreenBtn.addEventListener('click', async () => {
+  if (!videoShell) return;
+  if (document.fullscreenElement) {
+    await document.exitFullscreen().catch(() => {});
+  } else {
+    await videoShell.requestFullscreen().catch(() => {});
+  }
+});
+volumeRange.addEventListener('input', (event) => {
+  const value = Number(event.target.value);
+  const volume = Number.isNaN(value) ? 100 : value;
+  screenVideo.muted = false;
+  screenVideo.volume = Math.min(Math.max(volume / 100, 0), 1);
+  volumeValue.textContent = `${volume}%`;
+});
+document.addEventListener('fullscreenchange', () => {
+  if (document.fullscreenElement) {
+    fullscreenBtn.textContent = 'Exit full screen';
+  } else {
+    fullscreenBtn.textContent = 'Full screen';
+  }
+});
 
 socket.on('room-joined', ({ roomId, role }) => {
   state.roomId = roomId;
@@ -326,6 +392,12 @@ socket.on('share-stopped', () => {
   setStatus('Screen share ended', 'warning');
 });
 
+socket.on('request-offer', async () => {
+  if (state.role === 'host' && state.isSharing) {
+    await createOffer({ iceRestart: true });
+  }
+});
+
 socket.on('disconnect', () => {
   setStatus('Disconnected from server', 'warning');
   updateUI();
@@ -343,4 +415,7 @@ if (initialRoom) {
   }
 }
 
+screenVideo.volume = 1;
+volumeRange.value = '100';
+volumeValue.textContent = '100%';
 updateUI();

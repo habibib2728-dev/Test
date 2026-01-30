@@ -129,6 +129,18 @@ io.on('connection', (socket) => {
     socket.to(normalizedRoomId).emit('share-stopped');
   });
 
+  socket.on('request-offer', ({ roomId }) => {
+    const normalizedRoomId = normalizeRoomId(roomId);
+    if (!normalizedRoomId) {
+      return;
+    }
+    const room = rooms.get(normalizedRoomId);
+    if (!room) {
+      return;
+    }
+    io.to(room.hostId).emit('request-offer');
+  });
+
   socket.on('disconnect', () => {
     leaveRoom(socket);
   });
