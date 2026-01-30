@@ -34,6 +34,7 @@ const state = {
   isMakingOffer: false,
   iceServers: DEFAULT_ICE_SERVERS,
   turnConfigured: false,
+  pendingRoomId: null,
 };
 
 const RESTART_COOLDOWN_MS = 5000;
@@ -301,7 +302,7 @@ const startShare = async () => {
 
     stream.getVideoTracks().forEach((track) => {
       track.addEventListener('ended', () => {
-        stopShare(false);
+        stopShare(true);
       });
     });
 
@@ -356,13 +357,17 @@ const leaveRoom = () => {
   setConnectionText('Waiting for a room');
 };
 
+const emitJoin = (roomId, isReconnect = false) => {
+  socket.emit('join-room', { roomId, reconnect: isReconnect });
+};
+
 const joinRoom = (roomId) => {
   const normalized = normalizeRoomId(roomId);
   if (!normalized) {
     setStatus('Enter a valid room ID.', 'warning');
     return;
   }
-  socket.emit('join-room', { roomId: normalized });
+  emitJoin(normalized, false);
   setStatus('Joining room...', 'info');
 };
 
@@ -455,6 +460,19 @@ socket.on('host-left', () => {
   setStatus('Host disconnected', 'warning');
 });
 
+socket.on('host-disconnected', () => {
+  state.viewerConnected = false;
+  closePeerConnection();
+  clearStream();
+  setConnectionText('Host disconnected. Waiting for reconnection');
+  setStatus('Host connection lost. Waiting...', 'warning');
+});
+
+socket.on('host-reconnected', () => {
+  setConnectionText('Host reconnected. Syncing stream');
+  setStatus('Host reconnected', 'success');
+});
+
 socket.on('room-full', () => {
   setStatus('Room is full. Try another code.', 'error');
 });
@@ -530,16 +548,28 @@ socket.on('disconnect', () => {
 
 loadIceConfig();
 
+const handleSocketConnect = () => {
+  if (state.roomId) {
+    emitJoin(state.roomId, true);
+    setStatus('Reconnected. Syncing room...', 'info');
+    return;
+  }
+  if (state.pendingRoomId) {
+    joinRoom(state.pendingRoomId);
+    state.pendingRoomId = null;
+  }
+};
+
+socket.on('connect', handleSocketConnect);
+
 const initialRoom = new URLSearchParams(window.location.search).get('room');
 if (initialRoom) {
   roomInput.value = initialRoom;
-  if (socket.connected) {
-    joinRoom(initialRoom);
-  } else {
-    socket.on('connect', () => {
-      joinRoom(initialRoom);
-    });
-  }
+  state.pendingRoomId = initialRoom;
+}
+
+if (socket.connected) {
+  handleSocketConnect();
 }
 
 screenVideo.volume = 1;

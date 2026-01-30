@@ -9,6 +9,7 @@ const io = new Server(server);
 
 const PORT = process.env.PORT || 3000;
 const rooms = new Map();
+const HOST_GRACE_MS = 120000;
 
 const parseEnvUrls = (value) =>
   String(value || '')
@@ -86,7 +87,34 @@ const normalizeRoomId = (roomId) =>
     .replace(/[^a-z0-9-]/g, '')
     .slice(0, 24);
 
-const leaveRoom = (socket) => {
+const isHostConnected = (room) =>
+  room.hostId && room.peers.has(room.hostId);
+
+const clearRoomTimer = (room) => {
+  if (room.cleanupTimer) {
+    clearTimeout(room.cleanupTimer);
+    room.cleanupTimer = null;
+  }
+};
+
+const scheduleRoomCleanup = (roomId, room) => {
+  clearRoomTimer(room);
+  room.cleanupTimer = setTimeout(() => {
+    const currentRoom = rooms.get(roomId);
+    if (!currentRoom) {
+      return;
+    }
+    if (isHostConnected(currentRoom)) {
+      return;
+    }
+    if (currentRoom.peers.size > 0) {
+      io.to(roomId).emit('host-left');
+    }
+    rooms.delete(roomId);
+  }, HOST_GRACE_MS);
+};
+
+const leaveRoom = (socket, { isDisconnect = false } = {}) => {
   const { roomId, role } = socket.data || {};
   if (!roomId) {
     return;
@@ -101,11 +129,21 @@ const leaveRoom = (socket) => {
   socket.leave(roomId);
 
   if (role === 'host') {
-    socket.to(roomId).emit('host-left');
-    rooms.delete(roomId);
+    if (isDisconnect) {
+      room.hostId = null;
+      if (room.peers.size === 0) {
+        rooms.delete(roomId);
+      } else {
+        socket.to(roomId).emit('host-disconnected');
+        scheduleRoomCleanup(roomId, room);
+      }
+    } else {
+      socket.to(roomId).emit('host-left');
+      rooms.delete(roomId);
+    }
   } else {
     socket.to(roomId).emit('viewer-left');
-    if (room.peers.size === 0) {
+    if (room.peers.size === 0 && !room.hostId) {
       rooms.delete(roomId);
     }
   }
@@ -124,36 +162,49 @@ io.on('connection', (socket) => {
       return;
     }
 
-    const existingRoom = rooms.get(normalizedRoomId);
-    if (!existingRoom) {
-      rooms.set(normalizedRoomId, {
+    let room = rooms.get(normalizedRoomId);
+    if (!room) {
+      room = {
         hostId: socket.id,
-        peers: new Set([socket.id]),
-      });
-      socket.join(normalizedRoomId);
-      socket.data.roomId = normalizedRoomId;
-      socket.data.role = 'host';
-      socket.emit('room-joined', {
-        roomId: normalizedRoomId,
-        role: 'host',
-      });
-      return;
+        peers: new Set(),
+        cleanupTimer: null,
+      };
+      rooms.set(normalizedRoomId, room);
     }
 
-    if (existingRoom.peers.size >= 2) {
+    const hostConnected = isHostConnected(room);
+    const shouldBeHost = !hostConnected;
+
+    if (!shouldBeHost && room.peers.size >= 2) {
       socket.emit('room-full');
       return;
     }
 
-    existingRoom.peers.add(socket.id);
+    room.peers.add(socket.id);
     socket.join(normalizedRoomId);
     socket.data.roomId = normalizedRoomId;
-    socket.data.role = 'viewer';
-    socket.emit('room-joined', {
-      roomId: normalizedRoomId,
-      role: 'viewer',
-    });
-    io.to(existingRoom.hostId).emit('viewer-joined');
+    socket.data.role = shouldBeHost ? 'host' : 'viewer';
+
+    if (shouldBeHost) {
+      room.hostId = socket.id;
+      clearRoomTimer(room);
+      socket.emit('room-joined', {
+        roomId: normalizedRoomId,
+        role: 'host',
+      });
+      if (room.peers.size > 1) {
+        socket.emit('viewer-joined');
+        socket.to(normalizedRoomId).emit('host-reconnected');
+      }
+    } else {
+      socket.emit('room-joined', {
+        roomId: normalizedRoomId,
+        role: 'viewer',
+      });
+      if (room.hostId) {
+        io.to(room.hostId).emit('viewer-joined');
+      }
+    }
   });
 
   socket.on('leave-room', () => {
@@ -201,11 +252,14 @@ io.on('connection', (socket) => {
     if (!room) {
       return;
     }
+    if (!room.hostId) {
+      return;
+    }
     io.to(room.hostId).emit('request-offer');
   });
 
   socket.on('disconnect', () => {
-    leaveRoom(socket);
+    leaveRoom(socket, { isDisconnect: true });
   });
 });
 
