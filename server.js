@@ -16,33 +16,48 @@ const parseEnvUrls = (value) =>
     .map((url) => url.trim())
     .filter(Boolean);
 
+const uniqueUrls = (urls) => {
+  const seen = new Set();
+  return urls.filter((url) => {
+    if (seen.has(url)) {
+      return false;
+    }
+    seen.add(url);
+    return true;
+  });
+};
+
 const buildIceConfig = () => {
-  const stunUrls = parseEnvUrls(process.env.STUN_URLS);
+  const stunUrls = uniqueUrls(parseEnvUrls(process.env.STUN_URLS));
   if (stunUrls.length === 0) {
     stunUrls.push('stun:stun.l.google.com:19302');
   }
+  const limitedStunUrls = stunUrls.slice(0, 1);
 
-  const turnUrls = parseEnvUrls(
+  const turnUrls = uniqueUrls(
+    parseEnvUrls(
     process.env.TURN_URLS || process.env.TURN_URL
+    )
   );
   const username = process.env.TURN_USERNAME || process.env.TURN_USER;
   const credential =
     process.env.TURN_CREDENTIAL ||
     process.env.TURN_PASSWORD ||
     process.env.TURN_PASS;
+  const limitedTurnUrls = turnUrls.slice(0, 2);
 
   const iceServers = [];
-  if (stunUrls.length) {
-    iceServers.push({ urls: stunUrls });
+  if (limitedStunUrls.length) {
+    iceServers.push({ urls: limitedStunUrls });
   }
 
   const turnConfigured = Boolean(
-    turnUrls.length && username && credential
+    limitedTurnUrls.length && username && credential
   );
 
   if (turnConfigured) {
     iceServers.push({
-      urls: turnUrls,
+      urls: limitedTurnUrls,
       username,
       credential,
     });

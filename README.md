@@ -51,6 +51,9 @@ TURN_USERNAME=your-username
 TURN_CREDENTIAL=your-credential
 ```
 
+Note: The app uses only the first STUN URL and first two TURN URLs to avoid
+slow ICE discovery warnings.
+
 ## Notes
 
 This app uses public STUN servers. If two peers are behind strict NATs, a TURN
