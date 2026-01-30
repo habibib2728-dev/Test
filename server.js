@@ -2,6 +2,7 @@ const path = require('path');
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
+const twilio = require('twilio');
 
 const app = express();
 const server = http.createServer(app);
@@ -10,6 +11,12 @@ const io = new Server(server);
 const PORT = process.env.PORT || 3000;
 const rooms = new Map();
 const HOST_GRACE_MS = 120000;
+const hasTwilio =
+  Boolean(process.env.TWILIO_ACCOUNT_SID) &&
+  Boolean(process.env.TWILIO_AUTH_TOKEN);
+const twilioClient = hasTwilio
+  ? twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN)
+  : null;
 
 const parseEnvUrls = (value) =>
   String(value || '')
@@ -28,6 +35,23 @@ const uniqueUrls = (urls) => {
   });
 };
 
+const rankTurnUrl = (url) => {
+  let score = 0;
+  if (url.startsWith('turns:')) {
+    score += 4;
+  }
+  if (url.includes(':443')) {
+    score += 3;
+  }
+  if (url.includes('transport=tcp')) {
+    score += 1;
+  }
+  return score;
+};
+
+const sortTurnUrls = (urls) =>
+  [...urls].sort((a, b) => rankTurnUrl(b) - rankTurnUrl(a));
+
 const buildIceConfig = () => {
   const stunUrls = uniqueUrls(parseEnvUrls(process.env.STUN_URLS));
   if (stunUrls.length === 0) {
@@ -35,36 +59,51 @@ const buildIceConfig = () => {
   }
   const limitedStunUrls = stunUrls.slice(0, 1);
 
-  const turnUrls = uniqueUrls(
-    parseEnvUrls(
-    process.env.TURN_URLS || process.env.TURN_URL
-    )
-  );
-  const username = process.env.TURN_USERNAME || process.env.TURN_USER;
-  const credential =
-    process.env.TURN_CREDENTIAL ||
-    process.env.TURN_PASSWORD ||
-    process.env.TURN_PASS;
-  const limitedTurnUrls = turnUrls.slice(0, 2);
-
   const iceServers = [];
   if (limitedStunUrls.length) {
     iceServers.push({ urls: limitedStunUrls });
   }
 
-  const turnConfigured = Boolean(
-    limitedTurnUrls.length && username && credential
-  );
+  const turnProvider = hasTwilio ? 'twilio' : 'static';
 
-  if (turnConfigured) {
-    iceServers.push({
-      urls: limitedTurnUrls,
-      username,
-      credential,
-    });
+  if (!hasTwilio) {
+    const turnUrls = sortTurnUrls(
+      uniqueUrls(
+        parseEnvUrls(process.env.TURN_URLS || process.env.TURN_URL)
+      )
+    );
+    const username = process.env.TURN_USERNAME || process.env.TURN_USER;
+    const credential =
+      process.env.TURN_CREDENTIAL ||
+      process.env.TURN_PASSWORD ||
+      process.env.TURN_PASS;
+    const limitedTurnUrls = turnUrls.slice(0, 2);
+
+    const turnConfigured = Boolean(
+      limitedTurnUrls.length && username && credential
+    );
+
+    if (turnConfigured) {
+      iceServers.push({
+        urls: limitedTurnUrls,
+        username,
+        credential,
+      });
+    }
+
+    return {
+      iceServers,
+      turnConfigured,
+      turnProvider: turnConfigured ? 'static' : 'none',
+    };
   }
 
-  return { iceServers, turnConfigured };
+  return {
+    iceServers,
+    turnConfigured: true,
+    turnProvider,
+    turnEndpoint: '/turn',
+  };
 };
 
 const iceConfig = buildIceConfig();
@@ -74,6 +113,26 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.get('/config', (req, res) => {
   res.set('Cache-Control', 'no-store');
   res.json(iceConfig);
+});
+
+app.get('/turn', async (req, res) => {
+  if (!twilioClient) {
+    res.status(404).json({ error: 'TURN is not configured.' });
+    return;
+  }
+  try {
+    const ttl = Number.parseInt(process.env.TWILIO_TTL || '3600', 10);
+    const token = await twilioClient.tokens.create({
+      ttl: Number.isNaN(ttl) ? 3600 : ttl,
+    });
+    res.set('Cache-Control', 'no-store');
+    res.json({
+      iceServers: token.iceServers,
+      ttl: token.ttl,
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'TURN unavailable.' });
+  }
 });
 
 app.get(/.*/, (req, res) => {

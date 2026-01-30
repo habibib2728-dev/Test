@@ -56,6 +56,19 @@ TURN_CREDENTIAL=your-credential
 Note: The app uses only the first STUN URL and first two TURN URLs to avoid
 slow ICE discovery warnings.
 
+## Twilio TURN (recommended)
+
+Twilio issues short-lived TURN credentials. Set these env vars in Railway:
+
+```
+TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+TWILIO_AUTH_TOKEN=xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+TWILIO_TTL=3600
+```
+
+When Twilio is configured, the app will fetch fresh TURN credentials from
+`/turn` automatically. Do not commit secrets to the repo.
+
 ## Notes
 
 This app uses public STUN servers. If two peers are behind strict NATs, a TURN

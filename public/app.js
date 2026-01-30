@@ -34,15 +34,53 @@ const state = {
   isMakingOffer: false,
   iceServers: DEFAULT_ICE_SERVERS,
   turnConfigured: false,
+  turnProvider: 'none',
+  turnEndpoint: null,
+  turnExpiresAt: 0,
   pendingRoomId: null,
+  connectionTimer: null,
 };
 
 const RESTART_COOLDOWN_MS = 5000;
+const CONNECTION_TIMEOUT_MS = 15000;
+const TURN_REFRESH_BUFFER_MS = 60 * 1000;
 let iceConfigPromise = null;
+
+const refreshTurnServers = async () => {
+  if (state.turnProvider !== 'twilio' || !state.turnEndpoint) {
+    return;
+  }
+  if (
+    state.turnExpiresAt &&
+    Date.now() < state.turnExpiresAt - TURN_REFRESH_BUFFER_MS
+  ) {
+    return;
+  }
+  try {
+    const res = await fetch(state.turnEndpoint, { cache: 'no-store' });
+    if (!res.ok) {
+      throw new Error('TURN unavailable');
+    }
+    const data = await res.json();
+    if (data && Array.isArray(data.iceServers) && data.iceServers.length) {
+      state.iceServers = data.iceServers;
+      state.turnConfigured = true;
+      const ttlSeconds = Number(data.ttl) || 3600;
+      state.turnExpiresAt = Date.now() + ttlSeconds * 1000;
+      return;
+    }
+    throw new Error('TURN response empty');
+  } catch (err) {
+    state.iceServers = DEFAULT_ICE_SERVERS;
+    state.turnConfigured = false;
+  }
+};
 
 const loadIceConfig = async () => {
   if (iceConfigPromise) {
-    return iceConfigPromise;
+    await iceConfigPromise;
+    await refreshTurnServers();
+    return;
   }
 
   iceConfigPromise = fetch('/config', { cache: 'no-store' })
@@ -58,14 +96,20 @@ const loadIceConfig = async () => {
       } else {
         state.iceServers = DEFAULT_ICE_SERVERS;
       }
-      state.turnConfigured = Boolean(data && data.turnConfigured);
+      state.turnProvider = data && data.turnProvider ? data.turnProvider : 'none';
+      state.turnEndpoint = data && data.turnEndpoint ? data.turnEndpoint : null;
+      state.turnConfigured =
+        Boolean(data && data.turnConfigured) && state.turnProvider !== 'twilio';
     })
     .catch(() => {
       state.iceServers = DEFAULT_ICE_SERVERS;
       state.turnConfigured = false;
+      state.turnProvider = 'none';
+      state.turnEndpoint = null;
     });
 
-  return iceConfigPromise;
+  await iceConfigPromise;
+  await refreshTurnServers();
 };
 
 const setStatus = (message, type = 'info') => {
@@ -116,6 +160,27 @@ const updateUI = () => {
   if (shareAudioToggle) {
     shareAudioToggle.disabled = state.isSharing;
   }
+};
+
+const clearConnectionWatchdog = () => {
+  if (state.connectionTimer) {
+    clearTimeout(state.connectionTimer);
+    state.connectionTimer = null;
+  }
+};
+
+const startConnectionWatchdog = (message) => {
+  clearConnectionWatchdog();
+  state.connectionTimer = setTimeout(() => {
+    if (!state.peerConnection) {
+      return;
+    }
+    if (state.peerConnection.connectionState === 'connected') {
+      return;
+    }
+    setStatus(message || 'Still connecting. Retrying...', 'warning');
+    requestReconnect();
+  }, CONNECTION_TIMEOUT_MS);
 };
 
 const getShareConstraints = () => {
@@ -176,6 +241,7 @@ const closePeerConnection = () => {
   }
   state.remoteStream = null;
   state.isMakingOffer = false;
+  clearConnectionWatchdog();
 };
 
 const requestReconnect = async () => {
@@ -203,6 +269,7 @@ const getPeerConnection = (reset = false) => {
   closePeerConnection();
   const pc = new RTCPeerConnection({
     iceServers: state.iceServers || DEFAULT_ICE_SERVERS,
+    iceTransportPolicy: state.turnConfigured ? 'relay' : 'all',
   });
   pc.onicecandidate = (event) => {
     if (event.candidate && state.roomId) {
@@ -216,6 +283,7 @@ const getPeerConnection = (reset = false) => {
     const stateLabel = pc.connectionState;
     if (stateLabel === 'connected') {
       setStatus('Connected and streaming', 'success');
+      clearConnectionWatchdog();
     } else if (stateLabel === 'disconnected') {
       setStatus('Connection lost. Reconnecting...', 'warning');
       requestReconnect();
@@ -223,6 +291,10 @@ const getPeerConnection = (reset = false) => {
       setStatus('Connection failed. Reconnecting...', 'warning');
       requestReconnect();
     }
+  };
+  pc.onicecandidateerror = () => {
+    setStatus('ICE candidate error. Reconnecting...', 'warning');
+    requestReconnect();
   };
   pc.oniceconnectionstatechange = () => {
     if (pc.iceConnectionState === 'failed') {
@@ -281,6 +353,7 @@ const createOffer = async (options = {}, resetConnection = false) => {
       roomId: state.roomId,
       offer: pc.localDescription,
     });
+    startConnectionWatchdog('Connecting to viewer...');
   } catch (err) {
     setStatus('Could not create a connection offer.', 'warning');
   } finally {
@@ -471,6 +544,9 @@ socket.on('host-disconnected', () => {
 socket.on('host-reconnected', () => {
   setConnectionText('Host reconnected. Syncing stream');
   setStatus('Host reconnected', 'success');
+  if (state.role === 'viewer') {
+    requestReconnect();
+  }
 });
 
 socket.on('room-full', () => {
@@ -494,6 +570,7 @@ socket.on('webrtc-offer', async ({ offer }) => {
       roomId: state.roomId,
       answer: pc.localDescription,
     });
+    startConnectionWatchdog('Waiting for host stream...');
   } catch (err) {
     setStatus('Failed to apply the host offer.', 'warning');
   }
@@ -508,6 +585,7 @@ socket.on('webrtc-answer', async ({ answer }) => {
     await state.peerConnection.setRemoteDescription(
       new RTCSessionDescription(answer)
     );
+    startConnectionWatchdog('Finalizing connection...');
   } catch (err) {
     setStatus('Failed to apply the viewer answer.', 'warning');
   }
