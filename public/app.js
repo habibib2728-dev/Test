@@ -27,6 +27,7 @@ const state = {
   viewerConnected: false,
   isSharing: false,
   lastRestartAt: 0,
+  isMakingOffer: false,
 };
 
 const ICE_SERVERS = [
@@ -121,6 +122,7 @@ const closePeerConnection = () => {
     state.peerConnection = null;
   }
   state.remoteStream = null;
+  state.isMakingOffer = false;
 };
 
 const requestReconnect = async () => {
@@ -137,7 +139,10 @@ const requestReconnect = async () => {
   }
 };
 
-const createPeerConnection = () => {
+const getPeerConnection = (reset = false) => {
+  if (state.peerConnection && !reset) {
+    return state.peerConnection;
+  }
   closePeerConnection();
   const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
   pc.onicecandidate = (event) => {
@@ -177,18 +182,44 @@ const createPeerConnection = () => {
   return pc;
 };
 
+const syncLocalTracks = (pc) => {
+  if (!state.localStream) {
+    return;
+  }
+  const existingSenders = pc.getSenders();
+  state.localStream.getTracks().forEach((track) => {
+    const alreadyAdded = existingSenders.some(
+      (sender) => sender.track && sender.track.id === track.id
+    );
+    if (!alreadyAdded) {
+      pc.addTrack(track, state.localStream);
+    }
+  });
+};
+
 const createOffer = async (options = {}) => {
   if (!state.localStream) {
     setStatus('Start screen sharing first.', 'warning');
     return;
   }
-  const pc = createPeerConnection();
-  state.localStream.getTracks().forEach((track) => {
-    pc.addTrack(track, state.localStream);
-  });
-  const offer = await pc.createOffer(options);
-  await pc.setLocalDescription(offer);
-  socket.emit('webrtc-offer', { roomId: state.roomId, offer });
+  const pc = getPeerConnection();
+  if (state.isMakingOffer || pc.signalingState !== 'stable') {
+    return;
+  }
+  syncLocalTracks(pc);
+  state.isMakingOffer = true;
+  try {
+    const offer = await pc.createOffer(options);
+    await pc.setLocalDescription(offer);
+    socket.emit('webrtc-offer', {
+      roomId: state.roomId,
+      offer: pc.localDescription,
+    });
+  } catch (err) {
+    setStatus('Could not create a connection offer.', 'warning');
+  } finally {
+    state.isMakingOffer = false;
+  }
 };
 
 const startShare = async () => {
@@ -360,18 +391,33 @@ socket.on('error-message', ({ message }) => {
 
 socket.on('webrtc-offer', async ({ offer }) => {
   if (!offer) return;
-  const pc = createPeerConnection();
-  await pc.setRemoteDescription(new RTCSessionDescription(offer));
-  const answer = await pc.createAnswer();
-  await pc.setLocalDescription(answer);
-  socket.emit('webrtc-answer', { roomId: state.roomId, answer });
+  const resetConnection = state.role === 'viewer';
+  const pc = getPeerConnection(resetConnection);
+  try {
+    await pc.setRemoteDescription(new RTCSessionDescription(offer));
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+    socket.emit('webrtc-answer', {
+      roomId: state.roomId,
+      answer: pc.localDescription,
+    });
+  } catch (err) {
+    setStatus('Failed to apply the host offer.', 'warning');
+  }
 });
 
 socket.on('webrtc-answer', async ({ answer }) => {
   if (!state.peerConnection || !answer) return;
-  await state.peerConnection.setRemoteDescription(
-    new RTCSessionDescription(answer)
-  );
+  if (state.peerConnection.signalingState !== 'have-local-offer') {
+    return;
+  }
+  try {
+    await state.peerConnection.setRemoteDescription(
+      new RTCSessionDescription(answer)
+    );
+  } catch (err) {
+    setStatus('Failed to apply the viewer answer.', 'warning');
+  }
 });
 
 socket.on('webrtc-ice', async ({ candidate }) => {
