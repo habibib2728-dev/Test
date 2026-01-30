@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <title>ScreenShare Party</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="page">
+      <header class="header">
+        <div>
+          <h1>ScreenShare Party</h1>
+          <p class="tagline">
+            Share your screen with audio and watch videos together in real time.
+          </p>
+        </div>
+        <div class="status" id="statusBadge" data-type="info">
+          Ready to connect
+        </div>
+      </header>
+
+      <section class="card setup">
+        <div class="section-title">Room setup</div>
+        <div class="controls">
+          <div class="row">
+            <input
+              id="roomInput"
+              type="text"
+              placeholder="Enter a room code"
+              autocomplete="off"
+            />
+            <button id="createRoomBtn" class="secondary">
+              Create room
+            </button>
+            <button id="joinRoomBtn">Join room</button>
+          </div>
+          <div class="row">
+            <button id="copyLinkBtn" class="ghost" disabled>
+              Copy invite link
+            </button>
+            <div class="room-label">
+              Room:
+              <span id="roomDisplay">Not connected</span>
+            </div>
+          </div>
+          <div class="row">
+            <button id="startShareBtn" class="accent" disabled>
+              Start screen share
+            </button>
+            <button id="stopShareBtn" class="ghost" disabled>
+              Stop share
+            </button>
+            <button id="leaveRoomBtn" class="ghost" disabled>
+              Leave room
+            </button>
+          </div>
+        </div>
+        <div class="info-grid">
+          <div>
+            <div class="label">Role</div>
+            <div id="roleDisplay">Not connected</div>
+          </div>
+          <div>
+            <div class="label">Connection</div>
+            <div id="connectionDisplay">Waiting for a room</div>
+          </div>
+        </div>
+        <ul class="tips">
+          <li>Use Chrome for the best system audio capture.</li>
+          <li>Enable "Share audio" in the screen picker.</li>
+          <li>Keep your mic muted if you only want system audio.</li>
+        </ul>
+      </section>
+
+      <section class="card video-panel">
+        <div class="section-title">Shared screen</div>
+        <div class="video-shell">
+          <video
+            id="screenVideo"
+            class="video"
+            playsinline
+            autoplay
+          ></video>
+          <div class="video-placeholder" id="videoPlaceholder">
+            Share your screen to start the watch party.
+          </div>
+        </div>
+        <div class="video-footer">
+          <div class="hint">
+            If the video is silent, click the player to enable audio.
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="/app.js"></script>
+  </body>
+</html>
