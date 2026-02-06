@@ -37,6 +37,7 @@ const state = {
   turnProvider: 'none',
   turnEndpoint: null,
   turnExpiresAt: 0,
+  turnRefreshTimer: null,
   pendingRoomId: null,
   connectionTimer: null,
 };
@@ -44,16 +45,45 @@ const state = {
 const RESTART_COOLDOWN_MS = 5000;
 const CONNECTION_TIMEOUT_MS = 15000;
 const TURN_REFRESH_BUFFER_MS = 60 * 1000;
+const TURN_REFRESH_MIN_MS = 5 * 60 * 1000;
 let iceConfigPromise = null;
 
-const refreshTurnServers = async () => {
+const clearTurnRefreshTimer = () => {
+  if (state.turnRefreshTimer) {
+    clearTimeout(state.turnRefreshTimer);
+    state.turnRefreshTimer = null;
+  }
+};
+
+const scheduleTurnRefresh = () => {
   if (state.turnProvider !== 'twilio' || !state.turnEndpoint) {
+    clearTurnRefreshTimer();
+    return;
+  }
+  if (!state.turnExpiresAt) {
+    return;
+  }
+  const refreshIn = Math.max(
+    state.turnExpiresAt - Date.now() - TURN_REFRESH_BUFFER_MS,
+    TURN_REFRESH_MIN_MS
+  );
+  clearTurnRefreshTimer();
+  state.turnRefreshTimer = setTimeout(() => {
+    refreshTurnServers(true);
+  }, refreshIn);
+};
+
+const refreshTurnServers = async (force = false) => {
+  if (state.turnProvider !== 'twilio' || !state.turnEndpoint) {
+    clearTurnRefreshTimer();
     return;
   }
   if (
+    !force &&
     state.turnExpiresAt &&
     Date.now() < state.turnExpiresAt - TURN_REFRESH_BUFFER_MS
   ) {
+    scheduleTurnRefresh();
     return;
   }
   try {
@@ -67,12 +97,14 @@ const refreshTurnServers = async () => {
       state.turnConfigured = true;
       const ttlSeconds = Number(data.ttl) || 3600;
       state.turnExpiresAt = Date.now() + ttlSeconds * 1000;
+      scheduleTurnRefresh();
       return;
     }
     throw new Error('TURN response empty');
   } catch (err) {
     state.iceServers = DEFAULT_ICE_SERVERS;
     state.turnConfigured = false;
+    state.turnExpiresAt = 0;
   }
 };
 
@@ -106,6 +138,8 @@ const loadIceConfig = async () => {
       state.turnConfigured = false;
       state.turnProvider = 'none';
       state.turnEndpoint = null;
+      state.turnExpiresAt = 0;
+      clearTurnRefreshTimer();
     });
 
   await iceConfigPromise;
@@ -251,6 +285,7 @@ const requestReconnect = async () => {
     return;
   }
   state.lastRestartAt = now;
+  await refreshTurnServers(true);
   if (state.role === 'host' && state.isSharing) {
     const shouldReset =
       state.peerConnection &&
@@ -269,7 +304,6 @@ const getPeerConnection = (reset = false) => {
   closePeerConnection();
   const pc = new RTCPeerConnection({
     iceServers: state.iceServers || DEFAULT_ICE_SERVERS,
-    iceTransportPolicy: state.turnConfigured ? 'relay' : 'all',
   });
   pc.onicecandidate = (event) => {
     if (event.candidate && state.roomId) {
@@ -294,12 +328,16 @@ const getPeerConnection = (reset = false) => {
   };
   pc.onicecandidateerror = () => {
     setStatus('ICE candidate error. Reconnecting...', 'warning');
-    requestReconnect();
+    refreshTurnServers(true).finally(() => {
+      requestReconnect();
+    });
   };
   pc.oniceconnectionstatechange = () => {
     if (pc.iceConnectionState === 'failed') {
       setStatus('ICE failed. Reconnecting...', 'warning');
-      requestReconnect();
+      refreshTurnServers(true).finally(() => {
+        requestReconnect();
+      });
     }
   };
   pc.ontrack = (event) => {
@@ -649,6 +687,11 @@ if (initialRoom) {
 if (socket.connected) {
   handleSocketConnect();
 }
+
+window.addEventListener('beforeunload', () => {
+  clearTurnRefreshTimer();
+  clearConnectionWatchdog();
+});
 
 screenVideo.volume = 1;
 volumeRange.value = '100';
