@@ -39,6 +39,9 @@ const state = {
   turnExpiresAt: 0,
   turnRefreshTimer: null,
   lastCandidateErrorAt: 0,
+  lastRemoteTime: 0,
+  lastRemoteTimeAt: 0,
+  remoteWatchdogTimer: null,
   pendingRoomId: null,
   connectionTimer: null,
 };
@@ -47,6 +50,8 @@ const RESTART_COOLDOWN_MS = 5000;
 const CONNECTION_TIMEOUT_MS = 15000;
 const TURN_REFRESH_BUFFER_MS = 60 * 1000;
 const TURN_REFRESH_MIN_MS = 5 * 60 * 1000;
+const REMOTE_STALL_MS = 8000;
+const REMOTE_CHECK_INTERVAL_MS = 3000;
 let iceConfigPromise = null;
 
 const clearTurnRefreshTimer = () => {
@@ -54,6 +59,42 @@ const clearTurnRefreshTimer = () => {
     clearTimeout(state.turnRefreshTimer);
     state.turnRefreshTimer = null;
   }
+};
+
+const clearRemoteWatchdog = () => {
+  if (state.remoteWatchdogTimer) {
+    clearInterval(state.remoteWatchdogTimer);
+    state.remoteWatchdogTimer = null;
+  }
+};
+
+const startRemoteWatchdog = () => {
+  clearRemoteWatchdog();
+  state.lastRemoteTime = screenVideo.currentTime || 0;
+  state.lastRemoteTimeAt = Date.now();
+  state.remoteWatchdogTimer = setInterval(() => {
+    if (!screenVideo.srcObject || !state.peerConnection) {
+      return;
+    }
+    if (screenVideo.paused) {
+      screenVideo.play().catch(() => {});
+      return;
+    }
+    const currentTime = screenVideo.currentTime || 0;
+    if (currentTime !== state.lastRemoteTime) {
+      state.lastRemoteTime = currentTime;
+      state.lastRemoteTimeAt = Date.now();
+      return;
+    }
+    if (
+      Date.now() - state.lastRemoteTimeAt > REMOTE_STALL_MS &&
+      state.peerConnection.connectionState === 'connected'
+    ) {
+      setStatus('Stream stalled. Reconnecting...', 'warning');
+      requestReconnect();
+      state.lastRemoteTimeAt = Date.now();
+    }
+  }, REMOTE_CHECK_INTERVAL_MS);
 };
 
 const scheduleTurnRefresh = () => {
@@ -257,12 +298,18 @@ const attachStream = (stream, isLocal) => {
   screenVideo.play().catch(() => {
     setStatus('Click the video to start audio.', 'warning');
   });
+  if (isLocal) {
+    clearRemoteWatchdog();
+  } else {
+    startRemoteWatchdog();
+  }
   updateUI();
 };
 
 const clearStream = () => {
   screenVideo.srcObject = null;
   videoPlaceholder.style.display = 'flex';
+  clearRemoteWatchdog();
   updateUI();
 };
 
@@ -277,6 +324,7 @@ const closePeerConnection = () => {
   state.remoteStream = null;
   state.isMakingOffer = false;
   clearConnectionWatchdog();
+  clearRemoteWatchdog();
 };
 
 const requestReconnect = async () => {
@@ -333,7 +381,12 @@ const getPeerConnection = (reset = false) => {
       return;
     }
     state.lastCandidateErrorAt = now;
-    setStatus('Some network paths failed. Trying alternatives...', 'warning');
+    if (pc.connectionState === 'connected') {
+      setConnectionText('Network path changed. Keeping stream alive');
+      return;
+    }
+    setStatus('Network path failed. Reconnecting...', 'warning');
+    requestReconnect();
   };
   pc.oniceconnectionstatechange = () => {
     if (pc.iceConnectionState === 'failed') {
@@ -694,6 +747,7 @@ if (socket.connected) {
 window.addEventListener('beforeunload', () => {
   clearTurnRefreshTimer();
   clearConnectionWatchdog();
+  clearRemoteWatchdog();
 });
 
 screenVideo.volume = 1;
