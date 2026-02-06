@@ -38,6 +38,7 @@ const state = {
   turnEndpoint: null,
   turnExpiresAt: 0,
   turnRefreshTimer: null,
+  lastCandidateErrorAt: 0,
   pendingRoomId: null,
   connectionTimer: null,
 };
@@ -327,10 +328,12 @@ const getPeerConnection = (reset = false) => {
     }
   };
   pc.onicecandidateerror = () => {
-    setStatus('ICE candidate error. Reconnecting...', 'warning');
-    refreshTurnServers(true).finally(() => {
-      requestReconnect();
-    });
+    const now = Date.now();
+    if (now - state.lastCandidateErrorAt < 10000) {
+      return;
+    }
+    state.lastCandidateErrorAt = now;
+    setStatus('Some network paths failed. Trying alternatives...', 'warning');
   };
   pc.oniceconnectionstatechange = () => {
     if (pc.iceConnectionState === 'failed') {
