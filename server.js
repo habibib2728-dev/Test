@@ -149,6 +149,18 @@ const normalizeRoomId = (roomId) =>
 const isHostConnected = (room) =>
   room.hostId && room.peers.has(room.hostId);
 
+const prunePeers = (room) => {
+  const peers = Array.from(room.peers);
+  peers.forEach((peerId) => {
+    if (!io.sockets.sockets.get(peerId)) {
+      room.peers.delete(peerId);
+    }
+  });
+  if (room.hostId && !room.peers.has(room.hostId)) {
+    room.hostId = null;
+  }
+};
+
 const clearRoomTimer = (room) => {
   if (room.cleanupTimer) {
     clearTimeout(room.cleanupTimer);
@@ -230,6 +242,8 @@ io.on('connection', (socket) => {
       };
       rooms.set(normalizedRoomId, room);
     }
+
+    prunePeers(room);
 
     const hostConnected = isHostConnected(room);
     const shouldBeHost = !hostConnected;
