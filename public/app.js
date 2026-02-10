@@ -42,6 +42,9 @@ const state = {
   lastRemoteTime: 0,
   lastRemoteTimeAt: 0,
   remoteWatchdogTimer: null,
+  statsTimer: null,
+  adaptiveLevel: 0,
+  goodSamples: 0,
   pendingRoomId: null,
   connectionTimer: null,
 };
@@ -52,6 +55,7 @@ const TURN_REFRESH_BUFFER_MS = 60 * 1000;
 const TURN_REFRESH_MIN_MS = 5 * 60 * 1000;
 const REMOTE_STALL_MS = 8000;
 const REMOTE_CHECK_INTERVAL_MS = 3000;
+const STATS_INTERVAL_MS = 3000;
 let iceConfigPromise = null;
 
 const clearTurnRefreshTimer = () => {
@@ -66,6 +70,15 @@ const clearRemoteWatchdog = () => {
     clearInterval(state.remoteWatchdogTimer);
     state.remoteWatchdogTimer = null;
   }
+};
+
+const clearStatsMonitor = () => {
+  if (state.statsTimer) {
+    clearInterval(state.statsTimer);
+    state.statsTimer = null;
+  }
+  state.goodSamples = 0;
+  state.adaptiveLevel = 0;
 };
 
 const startRemoteWatchdog = () => {
@@ -259,27 +272,40 @@ const startConnectionWatchdog = (message) => {
   }, CONNECTION_TIMEOUT_MS);
 };
 
-const getShareConstraints = () => {
+const getQualityProfile = () => {
   const quality = qualitySelect ? qualitySelect.value : '720p60';
-  let width = 1280;
-  let height = 720;
-  let frameRate = 60;
   if (quality === '1080p30') {
-    width = 1920;
-    height = 1080;
-    frameRate = 30;
-  } else if (quality === '1080p60') {
-    width = 1920;
-    height = 1080;
-    frameRate = 60;
+    return {
+      width: 1920,
+      height: 1080,
+      frameRate: 30,
+      maxBitrate: 5500000,
+    };
   }
+  if (quality === '1080p60') {
+    return {
+      width: 1920,
+      height: 1080,
+      frameRate: 60,
+      maxBitrate: 8000000,
+    };
+  }
+  return {
+    width: 1280,
+    height: 720,
+    frameRate: 60,
+    maxBitrate: 4500000,
+  };
+};
 
+const getShareConstraints = () => {
+  const profile = getQualityProfile();
   const audioEnabled = shareAudioToggle ? shareAudioToggle.checked : true;
   return {
     video: {
-      width: { ideal: width, max: width },
-      height: { ideal: height, max: height },
-      frameRate: { ideal: frameRate, max: frameRate },
+      width: { ideal: profile.width, max: profile.width },
+      height: { ideal: profile.height, max: profile.height },
+      frameRate: { ideal: profile.frameRate, max: profile.frameRate },
     },
     audio: audioEnabled
       ? {
@@ -289,6 +315,156 @@ const getShareConstraints = () => {
         }
       : false,
   };
+};
+
+const getAdaptiveEncoding = (profile, level) => {
+  const cappedLevel = Math.max(0, Math.min(level, 2));
+  if (cappedLevel === 1) {
+    return {
+      maxBitrate: Math.round(profile.maxBitrate * 0.7),
+      maxFramerate: profile.frameRate,
+      scaleResolutionDownBy: 1.5,
+    };
+  }
+  if (cappedLevel >= 2) {
+    return {
+      maxBitrate: Math.round(profile.maxBitrate * 0.5),
+      maxFramerate: Math.min(profile.frameRate, 30),
+      scaleResolutionDownBy: 2.0,
+    };
+  }
+  return {
+    maxBitrate: profile.maxBitrate,
+    maxFramerate: profile.frameRate,
+    scaleResolutionDownBy: 1.0,
+  };
+};
+
+const applyEncodingParameters = async (pc, level = 0) => {
+  if (!pc) return;
+  const profile = getQualityProfile();
+  const encoding = getAdaptiveEncoding(profile, level);
+  const senders = pc.getSenders ? pc.getSenders() : [];
+  await Promise.all(
+    senders.map(async (sender) => {
+      if (!sender.track) return;
+      const params = sender.getParameters();
+      params.encodings = params.encodings || [{}];
+      if (sender.track.kind === 'video') {
+        params.encodings[0].maxBitrate = encoding.maxBitrate;
+        params.encodings[0].maxFramerate = encoding.maxFramerate;
+        params.encodings[0].scaleResolutionDownBy =
+          encoding.scaleResolutionDownBy;
+        params.encodings[0].priority = 'high';
+        params.degradationPreference = 'maintain-framerate';
+      } else if (sender.track.kind === 'audio') {
+        params.encodings[0].maxBitrate = 128000;
+        params.encodings[0].priority = 'high';
+      }
+      try {
+        await sender.setParameters(params);
+      } catch (err) {
+        // Ignore if browser blocks sender parameters.
+      }
+    })
+  );
+};
+
+const startStatsMonitor = (pc) => {
+  if (!pc || state.role !== 'host') {
+    return;
+  }
+  clearStatsMonitor();
+  state.statsTimer = setInterval(async () => {
+    if (!state.peerConnection || !state.localStream) {
+      return;
+    }
+    try {
+      const stats = await pc.getStats();
+      let outboundVideo = null;
+      let candidatePair = null;
+      const candidates = new Map();
+
+      stats.forEach((report) => {
+        if (report.type === 'outbound-rtp' && report.kind === 'video') {
+          outboundVideo = report;
+        }
+        if (report.type === 'candidate-pair' && report.selected) {
+          candidatePair = report;
+        }
+        if (report.type === 'local-candidate') {
+          candidates.set(report.id, report);
+        }
+        if (report.type === 'remote-candidate') {
+          candidates.set(report.id, report);
+        }
+      });
+
+      if (!outboundVideo) {
+        return;
+      }
+
+      if (!candidatePair) {
+        stats.forEach((report) => {
+          if (
+            report.type === 'candidate-pair' &&
+            report.state === 'succeeded' &&
+            report.nominated
+          ) {
+            candidatePair = report;
+          }
+        });
+      }
+
+      if (candidatePair) {
+        const localCandidate = candidates.get(candidatePair.localCandidateId);
+        const remoteCandidate = candidates.get(candidatePair.remoteCandidateId);
+        const isRelay =
+          (localCandidate && localCandidate.candidateType === 'relay') ||
+          (remoteCandidate && remoteCandidate.candidateType === 'relay');
+        if (isRelay && state.adaptiveLevel === 0) {
+          state.adaptiveLevel = 1;
+          await applyEncodingParameters(pc, state.adaptiveLevel);
+        }
+      }
+
+      const fps =
+        typeof outboundVideo.framesPerSecond === 'number'
+          ? outboundVideo.framesPerSecond
+          : null;
+      const targetFps = getQualityProfile().frameRate;
+      const qualityReason = outboundVideo.qualityLimitationReason;
+
+      const shouldDegrade =
+        (qualityReason && qualityReason !== 'none') ||
+        (fps !== null && fps < targetFps * 0.7);
+      const shouldImprove =
+        (qualityReason === 'none' || !qualityReason) &&
+        (fps === null || fps > targetFps * 0.9);
+
+      if (shouldDegrade && state.adaptiveLevel < 2) {
+        state.adaptiveLevel += 1;
+        state.goodSamples = 0;
+        await applyEncodingParameters(pc, state.adaptiveLevel);
+        setConnectionText('Adjusting quality to keep playback smooth');
+        return;
+      }
+
+      if (shouldImprove) {
+        state.goodSamples += 1;
+        if (state.goodSamples >= 3 && state.adaptiveLevel > 0) {
+          state.adaptiveLevel -= 1;
+          state.goodSamples = 0;
+          await applyEncodingParameters(pc, state.adaptiveLevel);
+          setConnectionText('Connection stabilized. Quality improving');
+        }
+      } else {
+        state.goodSamples = 0;
+      }
+    } catch (err) {
+      // Ignore stats errors.
+    }
+  }, STATS_INTERVAL_MS);
 };
 
 const attachStream = (stream, isLocal) => {
@@ -325,6 +501,7 @@ const closePeerConnection = () => {
   state.isMakingOffer = false;
   clearConnectionWatchdog();
   clearRemoteWatchdog();
+  clearStatsMonitor();
 };
 
 const requestReconnect = async () => {
@@ -441,6 +618,7 @@ const createOffer = async (options = {}, resetConnection = false) => {
   syncLocalTracks(pc);
   state.isMakingOffer = true;
   try {
+    await applyEncodingParameters(pc, state.adaptiveLevel);
     const offer = await pc.createOffer(options);
     await pc.setLocalDescription(offer);
     socket.emit('webrtc-offer', {
@@ -448,6 +626,7 @@ const createOffer = async (options = {}, resetConnection = false) => {
       offer: pc.localDescription,
     });
     startConnectionWatchdog('Connecting to viewer...');
+    startStatsMonitor(pc);
   } catch (err) {
     setStatus('Could not create a connection offer.', 'warning');
   } finally {
@@ -463,6 +642,7 @@ const startShare = async () => {
     );
     state.localStream = stream;
     state.isSharing = true;
+    state.adaptiveLevel = 0;
     attachStream(stream, true);
     setStatus('Sharing your screen', 'success');
     updateUI();
@@ -507,6 +687,7 @@ const stopShare = (notifyPeer = true) => {
   }
   setStatus('Screen sharing stopped', 'warning');
   updateUI();
+  clearStatsMonitor();
 };
 
 const leaveRoom = () => {
@@ -608,6 +789,7 @@ socket.on('viewer-joined', async () => {
   state.viewerConnected = true;
   setConnectionText('Viewer connected');
   if (state.isSharing) {
+    state.adaptiveLevel = 0;
     await createOffer();
   }
 });
@@ -748,6 +930,7 @@ window.addEventListener('beforeunload', () => {
   clearTurnRefreshTimer();
   clearConnectionWatchdog();
   clearRemoteWatchdog();
+  clearStatsMonitor();
 });
 
 screenVideo.volume = 1;
